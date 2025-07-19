@@ -790,10 +790,10 @@ class SoundCloudPipeline:
             "key": ["key_profile"],
         }
         # Load Spotify ground-truth baseline
-        self.baseline = (
-            pd.read_csv(SPOTIFY_BASELINE)
-              .set_index(['name', 'artist'])
-        )
+        # self.baseline = (
+        #     pd.read_csv(SPOTIFY_BASELINE)
+        #       .set_index(['name', 'artist'])
+        # )
 
         logging.info(f"Using download folder: {self.download_folder.resolve()}")
         logging.info(f"Using checkpoint file: {self.checkpoint_file.resolve()}")
