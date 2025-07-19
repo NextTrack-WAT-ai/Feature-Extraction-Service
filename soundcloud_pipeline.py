@@ -772,7 +772,7 @@ class SoundCloudPipeline:
         self.scraper = SoundCloudScraper()
         self.downloader = YTDLPDownloader(self.download_folder) # Use the new downloader
         self.checkpoint_data = self._load_checkpoint()
-        self.song_list = self.get_songs_from_file(metadata_file, start_index, end_index)
+        # self.song_list = self.get_songs_from_file(metadata_file, start_index, end_index)
         self.analyzer = SpotifyFeaturesTunable()
         self.downloaded_songs_paths = []
         # Ensure download folder exists
