@@ -176,6 +176,10 @@ class SoundCloudScraper:
             chrome_options.add_argument("--disable-sync")
             chrome_options.add_argument("--disable-translate")
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--remote-debugging-port=9222")
             chrome_options.add_argument(f'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
 
             # Ensure Chrome binary is found (especially on macOS/Linux)
@@ -228,7 +232,7 @@ class SoundCloudScraper:
             # Optional: Add a small explicit wait to allow content within the list to potentially load
             time.sleep(2)
             
-            page_source = self.driver.page_source
+            page_source = self.driver.find_element(By.CSS_SELECTOR, "ul.lazyLoadingList__list").get_attribute("innerHTML")
             
         except TimeoutException:
             logging.error(f"Timeout waiting for SoundCloud search results list ({results_list_selector[1]}) to appear for query '{query}'.")
