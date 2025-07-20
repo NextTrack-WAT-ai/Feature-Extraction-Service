@@ -251,16 +251,8 @@ class SoundCloudScraper:
         soup = BeautifulSoup(html_content, 'lxml')
         search_results = []
         
-        # *** Updated Selectors based on new HTML structure (April 2025) ***
-        # Find the main list containing search results
-        results_list = soup.find('ul', class_=lambda x: x and 'lazyLoadingList__list' in x.split())
-        if not results_list:
-             logging.warning("Could not find the main search results list (ul.lazyLoadingList__list). Structure might have changed again.")
-             return []
+        search_items = soup.find_all('li', class_=lambda x: x and 'searchList__item' in x.split(), recursive=False)
 
-        # Find all individual search item list elements within the main list
-        search_items = results_list.find_all('li', class_=lambda x: x and 'searchList__item' in x.split(), recursive=False)
-        
         if not search_items:
             logging.warning("Could not find individual search items (li.searchList__item). Structure might have changed.")
             return []
