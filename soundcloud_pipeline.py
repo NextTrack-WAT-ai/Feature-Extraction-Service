@@ -84,7 +84,7 @@ FEATURE_CACHE = "./audio_features_cache.csv"
 SPOTIFY_BASELINE = "music_info_cleaned.csv"
 
 REQUEST_TIMEOUT = 15  # seconds for HTTP requests
-SELENIUM_TIMEOUT = 30 # Increased timeout seconds for Selenium waits
+SELENIUM_TIMEOUT = 60 # Increased timeout seconds for Selenium waits
 MATCH_THRESHOLD = 75  # Minimum fuzzy match score (0-100)
 REQUEST_DELAY = 2     # seconds delay between requests
 
