@@ -21,7 +21,7 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-MODEL_DIR = BASE_DIR / "models"
+MODEL_DIR = "models"
 
 # METADATA_CSV = BASE_DIR / "music_info_cleaned.csv"
 pipeline = SoundCloudPipeline(start_index=0, end_index=0, download_folder=DOWNLOAD_FOLDER)

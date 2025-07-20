@@ -152,7 +152,7 @@ class SoundCloudScraper:
 
     def __init__(self, browserless_api_key):
         self.browserless_api_key = browserless_api_key
-        self.BROWSERLESS_URL = f"https://chrome.browserless.io/content?token={self.browserless_api_key}"
+        self.BROWSERLESS_URL = f"https://production-sfo.browserless.io/function?token={self.browserless_api_key}"
         self.BANNED_KEYWORDS = [
             "remastered", "live", "album version", "mono", "slowed", 
             "reverb", "edit", "clean", "explicit", "version"
@@ -165,26 +165,45 @@ class SoundCloudScraper:
         logging.info(f"Searching SoundCloud via Browserless for: '{query}' at {search_url}")
 
         script = f"""
-        async function() {{
-            const page = await browser.newPage();
-            await page.goto("{search_url}", {{ waitUntil: "networkidle2", timeout: 60000 }});
-            await page.waitForSelector("ul.lazyLoadingList__list", {{ timeout: 30000 }});
-            const html = await page.evaluate(() => {{
-                const list = document.querySelector("ul.lazyLoadingList__list");
-                return list ? list.innerHTML : "";
+        export default async function({{ page }}) {{
+        try {{
+            await page.goto("{search_url}", {{
+            waitUntil: "domcontentloaded",
+            timeout: 60000
             }});
-            await page.close();
-            return html;
+
+            await new Promise(resolve => setTimeout(resolve, 3000));  // Wait 3s
+
+            const html = await page.evaluate(() => document.body.innerHTML);
+            return {{
+            data: html,
+            type: "text/html"
+            }};
+        }} catch (err) {{
+            return {{
+            data: "ERROR: " + err.toString(),
+            type: "text/plain"
+            }};
+        }}
         }}
         """
 
         try:
-            response = requests.post(self.BROWSERLESS_URL, json={"code": script})
+            headers = {
+                "Content-Type": "application/javascript"
+            }
+            response = requests.post(
+                self.BROWSERLESS_URL,
+                headers=headers,
+                data=script
+            )
+
             response.raise_for_status()
-            content = response.text.strip()
+
+            content = response.json().get("data", "").strip()
             if not content:
                 raise ValueError("Empty HTML returned from Browserless")
-            return f"<ul class='lazyLoadingList__list'>{content}</ul>"
+            return content
         except Exception as e:
             logging.error(f"Browserless search request failed for '{query}': {e}")
             return None
@@ -193,22 +212,36 @@ class SoundCloudScraper:
         """Parses the raw HTML of search results."""
         if not html_content:
             return []
-        
+
         soup = BeautifulSoup(html_content, 'lxml')
-        items = soup.find_all('li', recursive=False)
+        # Find the main results list container
+        results_list = soup.find('ul', class_='lazyLoadingList__list')
+        if not results_list:
+            logging.warning("No results list container found")
+            return []
+
+        # Find all list items directly inside results_list
+        items = results_list.find_all('li', class_='searchList__item', recursive=False)
         results = []
 
         for item in items:
             try:
-                title_link = item.find('a', class_='soundTitle__title')
-                artist_link = item.find('a', class_='soundTitle__username')
+                search_item_div = item.find('div', class_='searchItem')
+                if not search_item_div:
+                    continue
+
+                title_link = search_item_div.find('a', class_='soundTitle__title')
+                artist_link = search_item_div.find('a', class_='soundTitle__username')
                 if not title_link or not artist_link:
                     continue
+
                 url = title_link.get('href')
                 if not url or '/sets/' in url or '/people/' in url:
                     continue
-                title = title_link.text.strip()
-                artist = artist_link.text.strip()
+
+                title = title_link.get_text(strip=True)
+                artist = artist_link.get_text(strip=True)
+
                 results.append({
                     'title': title,
                     'artist': artist,
@@ -220,6 +253,7 @@ class SoundCloudScraper:
 
         logging.info(f"Parsed {len(results)} results.")
         return results
+
 
     def find_best_match(self, search_results, target_song, target_artist):
         best_match = None
