@@ -232,7 +232,11 @@ class SoundCloudScraper:
             # Optional: Add a small explicit wait to allow content within the list to potentially load
             time.sleep(2)
             
-            page_source = self.driver.find_element(By.CSS_SELECTOR, "ul.lazyLoadingList__list").get_attribute("innerHTML")
+            elements = self.driver.find_elements(By.CSS_SELECTOR, "ul.lazyLoadingList__list > li")
+            page_source = "\n".join(e.get_attribute("outerHTML") for e in elements)
+
+            if not page_source.strip():
+                logging.warning("Search list is empty after waiting — possible dynamic content issue.")
             
         except TimeoutException:
             logging.error(f"Timeout waiting for SoundCloud search results list ({results_list_selector[1]}) to appear for query '{query}'.")
