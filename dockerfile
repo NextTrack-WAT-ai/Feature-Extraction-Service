@@ -3,6 +3,7 @@ FROM python:3.11-slim
 
 # Install dependencies for Chrome and other essentials
 RUN apt-get update && apt-get install -y \
+    ffmpeg \
     wget \
     gnupg2 \
     unzip \
