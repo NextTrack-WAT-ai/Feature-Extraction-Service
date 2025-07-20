@@ -47,7 +47,6 @@ import os
 os.environ.setdefault("NUMBA_DISABLE_INTEL_SVML", "1")
 os.environ.setdefault("NUMBA_DISABLE_JIT",  "1")
 import json
-import time
 import logging
 import re
 from pathlib import Path
@@ -145,224 +144,108 @@ def normalize(s):
 #     except Exception as e:
 #         logging.error(f"Error saving comparison for {title} by {artist}: {e}")
 
-# --- Core Classes ---
-class SoundCloudScraper:
-    """Handles searching SoundCloud and parsing results using Selenium."""
+SOUNDCLOUD_SEARCH_URL = "https://soundcloud.com/search/sounds?q={query}"
+MATCH_THRESHOLD = 70
 
-    def __init__(self):
-        self.driver = None
-        self.session = requests.Session() # Keep requests for potential future use
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+class SoundCloudScraper:
+    """Searches SoundCloud using Browserless instead of local Selenium."""
+
+    def __init__(self, browserless_api_key):
+        self.browserless_api_key = browserless_api_key
+        self.BROWSERLESS_URL = f"https://chrome.browserless.io/content?token={self.browserless_api_key}"
         self.BANNED_KEYWORDS = [
             "remastered", "live", "album version", "mono", "slowed", 
             "reverb", "edit", "clean", "explicit", "version"
         ]
 
-    def _setup_driver(self):
-        """Initializes the Selenium WebDriver for this scraper instance."""
-        if self.driver:
-             return True # Already initialized
-        try:
-            logging.info("Setting up Selenium WebDriver for SoundCloudScraper...")
-            chrome_options = Options()
-            chrome_options.add_argument("--headless=new")  # Consider headless for performance
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-background-networking")
-            chrome_options.add_argument("--disable-sync")
-            chrome_options.add_argument("--disable-translate")
-            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-            chrome_options.add_argument("--disable-background-timer-throttling")
-            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-            chrome_options.add_argument("--disable-renderer-backgrounding")
-            chrome_options.add_argument("--remote-debugging-port=9222")
-            chrome_options.add_argument(f'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-
-            # Ensure Chrome binary is found (especially on macOS/Linux)
-            # try:
-            #     chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" # Example for macOS
-            # except:
-            #     logging.warning("Default Chrome binary location not found or specified. Assuming it's in PATH.")
-            #     pass
-
-            service = ChromeService(ChromeDriverManager().install())    
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            self.driver.implicitly_wait(5)
-            logging.info("SoundCloudScraper WebDriver setup complete.")
-            return True
-        except Exception as e:
-            logging.error(f"Failed to setup SoundCloudScraper WebDriver: {e}")
-            self.driver = None
-            return False
-            
-    def _quit_driver(self):
-        """Closes the Selenium WebDriver if it was initialized."""
-        if self.driver:
-            logging.info("Closing SoundCloudScraper WebDriver.")
-            try:
-                self.driver.quit()
-            except Exception as e:
-                logging.warning(f"Error quitting SoundCloudScraper WebDriver: {e}")
-            self.driver = None
-
     def search(self, song_name, artist_name):
-        """Searches SoundCloud using Selenium to handle dynamic content."""
-        if not self._setup_driver():
-            return None
-
+        """Performs SoundCloud search using Browserless remote headless browser."""
         query = f"{song_name} {artist_name}"
         search_url = SOUNDCLOUD_SEARCH_URL.format(query=quote_plus(query))
-        logging.info(f"Searching SoundCloud via Selenium for: '{query}' at {search_url}")
-        
-        page_source = None
+        logging.info(f"Searching SoundCloud via Browserless for: '{query}' at {search_url}")
+
+        script = f"""
+        async function() {{
+            const page = await browser.newPage();
+            await page.goto("{search_url}", {{ waitUntil: "networkidle2", timeout: 60000 }});
+            await page.waitForSelector("ul.lazyLoadingList__list", {{ timeout: 30000 }});
+            const html = await page.evaluate(() => {{
+                const list = document.querySelector("ul.lazyLoadingList__list");
+                return list ? list.innerHTML : "";
+            }});
+            await page.close();
+            return html;
+        }}
+        """
+
         try:
-            self.driver.get(search_url)
-            
-            # Wait for the main results list container to be present in the DOM
-            results_list_selector = (By.CSS_SELECTOR, "ul.lazyLoadingList__list")
-            logging.info(f"Waiting up to {SELENIUM_TIMEOUT}s for results list ({results_list_selector[1]}) to load...")
-            wait = WebDriverWait(self.driver, SELENIUM_TIMEOUT)
-            wait.until(EC.presence_of_element_located(results_list_selector))
-            logging.info("Results list found.")
-            
-            # Optional: Add a small explicit wait to allow content within the list to potentially load
-            time.sleep(2)
-            
-            elements = self.driver.find_elements(By.CSS_SELECTOR, "ul.lazyLoadingList__list > li")
-            page_source = "\n".join(e.get_attribute("outerHTML") for e in elements)
-
-            if not page_source.strip():
-                logging.warning("Search list is empty after waiting — possible dynamic content issue.")
-            
-        except TimeoutException:
-            logging.error(f"Timeout waiting for SoundCloud search results list ({results_list_selector[1]}) to appear for query '{query}'.")
+            response = requests.post(self.BROWSERLESS_URL, json={"code": script})
+            response.raise_for_status()
+            content = response.text.strip()
+            if not content:
+                raise ValueError("Empty HTML returned from Browserless")
+            return f"<ul class='lazyLoadingList__list'>{content}</ul>"
         except Exception as e:
-            logging.error(f"Selenium search request failed for '{query}': {e}")
-        # Removed finally block with _quit_driver here - driver should persist until pipeline is done
-        # Consider quitting driver in the pipeline logic after processing all songs
-
-        return page_source
+            logging.error(f"Browserless search request failed for '{query}': {e}")
+            return None
 
     def parse_results(self, html_content):
-        """Parses SoundCloud search results HTML."""
+        """Parses the raw HTML of search results."""
         if not html_content:
             return []
-            
-        soup = BeautifulSoup(html_content, 'lxml')
-        search_results = []
         
-        search_items = soup.find_all('li', class_=lambda x: x and 'searchList__item' in x.split(), recursive=False)
+        soup = BeautifulSoup(html_content, 'lxml')
+        items = soup.find_all('li', recursive=False)
+        results = []
 
-        if not search_items:
-            logging.warning("Could not find individual search items (li.searchList__item). Structure might have changed.")
-            return []
-
-        logging.info(f"Found {len(search_items)} potential search items (li elements) in search results.")
-
-        for item in search_items:
-            # Focus only on track items (div with class 'sound' and 'track')
-            track_item = item.find('div', class_=lambda x: x and 'sound' in x.split() and 'track' in x.split())
-            if not track_item:
-                logging.debug("Skipping item: Not a track item.")
-                continue
-
+        for item in items:
             try:
-                # Find title link and URL
-                title_link_element = track_item.find('a', class_=lambda x: x and 'soundTitle__title' in x.split())
-                if not title_link_element or not title_link_element.get('href'):
-                    logging.warning("Skipping track item: Missing title link or href.")
+                title_link = item.find('a', class_='soundTitle__title')
+                artist_link = item.find('a', class_='soundTitle__username')
+                if not title_link or not artist_link:
                     continue
-                
-                track_url_path = title_link_element['href']
-                # Basic validation for a track URL path
-                if not track_url_path or not track_url_path.startswith('/') or '/sets/' in track_url_path or '/people/' in track_url_path:
-                     logging.warning(f"Skipping track item: Invalid or non-track URL path '{track_url_path}'.")
-                     continue
-
-                track_url = f"https://soundcloud.com{track_url_path}"
-                
-                # Find the actual title text within the link (often in a span)
-                title_span = title_link_element.find('span', recursive=False) # Check immediate span first
-                title = title_span.text.strip() if title_span else title_link_element.text.strip()
-
-
-                # Find artist link/name
-                artist_link_element = track_item.find('a', class_=lambda x: x and 'soundTitle__username' in x.split())
-                artist_span = artist_link_element.find('span', class_='soundTitle__usernameText') if artist_link_element else None
-                artist = artist_span.text.strip() if artist_span else (artist_link_element.text.strip() if artist_link_element else "Unknown Artist")
-                
-                if title and artist != "Unknown Artist" and track_url:
-                    search_results.append({
-                        'title': title,
-                        'artist': artist,
-                        'url': track_url
-                    })
-                    logging.debug(f"Successfully parsed track: Title='{title}', Artist='{artist}', URL='{track_url}'")
-                else:
-                     logging.warning(f"Skipping track item: Missing title, artist, or URL after parsing. Title:'{title}', Artist:'{artist}', URL:'{track_url}'")
-
+                url = title_link.get('href')
+                if not url or '/sets/' in url or '/people/' in url:
+                    continue
+                title = title_link.text.strip()
+                artist = artist_link.text.strip()
+                results.append({
+                    'title': title,
+                    'artist': artist,
+                    'url': f"https://soundcloud.com{url}"
+                })
             except Exception as e:
-                logging.error(f"Error parsing a track search result item: {e}", exc_info=True) # Log traceback for errors
+                logging.warning(f"Skipping item due to parse error: {e}")
                 continue
-                
-        logging.info(f"Parsed {len(search_results)} valid tracks from search results.")
-        return search_results
+
+        logging.info(f"Parsed {len(results)} results.")
+        return results
 
     def find_best_match(self, search_results, target_song, target_artist):
-        """Filters search results to find the best match based on fuzzy scoring."""
         best_match = None
         highest_score = -1
 
-        logging.info(f"Filtering {len(search_results)} results for '{target_song}' by '{target_artist}'")
-
         for result in search_results:
-            if result['title'] in self.BANNED_KEYWORDS or result['artist'] in self.BANNED_KEYWORDS:
+            if any(kw in result['title'].lower() for kw in self.BANNED_KEYWORDS):
                 continue
-                
-            if result['title'] == target_song and result['artist'] == target_artist:
-                logging.info(f"Found exact match: '{result['title']}' by '{result['artist']}'")
-                return result
 
-            title_score = fuzz.ratio(target_song.lower(), result['title'].lower())
-            # Partial ratio can be good if target name is part of a longer title
-            title_score_partial = fuzz.partial_ratio(target_song.lower(), result['title'].lower())
-            # Use the higher of the two title scores
-            effective_title_score = max(title_score, title_score_partial)
-
+            title_score = max(
+                fuzz.ratio(target_song.lower(), result['title'].lower()),
+                fuzz.partial_ratio(target_song.lower(), result['title'].lower())
+            )
             artist_score = fuzz.ratio(target_artist.lower(), result['artist'].lower())
-            
-            # Weighted score: prioritize artist match slightly more
-            # Adjust weights as needed
-            combined_score = (effective_title_score * 0.4) + (artist_score * 0.6)
+            score = title_score * 0.4 + artist_score * 0.6
 
-            logging.debug(f"  Candidate: '{result['title']}' by '{result['artist']}' "
-                          f"(Title Score: {effective_title_score}, Artist Score: {artist_score}, Combined: {combined_score:.2f}) "
-                          f"URL: {result['url']}")
+            if score > highest_score:
+                highest_score = score
+                best_match = result
 
-
-            # Prefer perfect artist matches if scores are close
-            if combined_score > highest_score:
-                # Check if this is a significantly better score OR if the artist is a much better match
-                 is_better_artist = artist_score > fuzz.ratio(target_artist.lower(), best_match['artist'].lower()) if best_match else True
-                 # Require a significant score improvement or a much better artist match to switch
-                 if combined_score > highest_score + 5 or (combined_score >= highest_score and is_better_artist) : 
-                    highest_score = combined_score
-                    best_match = result
-                    logging.debug(f"    New best candidate found.")
-
-
-        if best_match and highest_score >= MATCH_THRESHOLD:
-            logging.info(f"Best match found: '{best_match['title']}' by '{best_match['artist']}' "
-                         f"with score {highest_score:.2f}")
+        if highest_score >= MATCH_THRESHOLD:
+            logging.info(f"Best match: {best_match['title']} by {best_match['artist']} ({highest_score})")
             return best_match
-        else:
-            logging.warning(f"No suitable match found for '{target_song}' by '{target_artist}' "
-                            f"(Highest score: {highest_score:.2f}, Threshold: {MATCH_THRESHOLD})")
-            return None
+        logging.warning("No good match found.")
+        return None
+
 
 # --- New YTDLPDownloader Class ---
 class YTDLPDownloader:

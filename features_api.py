@@ -89,13 +89,10 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
         logging.info(f"Processing: {track_key}")
 
         # Search and download
-        scraper = SoundCloudScraper()
-        page_html = scraper.search(track_name, artist)
-        if not page_html:
-            raise ValueError("Search page is empty")
-
-        search_results = scraper.parse_results(page_html)
-        best_match = scraper.find_best_match(search_results, track_name, artist)
+        scraper = SoundCloudScraper(browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
+        html = scraper.search(track_name, artist)
+        results = scraper.parse_results(html)
+        best_match = scraper.find_best_match(results, track_name, artist)
 
         if not best_match:
             raise ValueError(f"No suitable match found for '{track_key}'")
