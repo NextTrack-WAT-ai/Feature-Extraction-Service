@@ -657,7 +657,7 @@ class SoundCloudPipeline:
     def __init__(self, download_folder=DOWNLOAD_FOLDER, checkpoint_file=CHECKPOINT_FILE, start_index=0, end_index=100, metadata_file='./music_info_cleaned.csv'):
         self.download_folder = Path(download_folder)
         self.checkpoint_file = Path(checkpoint_file)
-        self.scraper = SoundCloudScraper()
+        self.scraper = SoundCloudScraper(browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
         self.downloader = YTDLPDownloader(self.download_folder) # Use the new downloader
         self.checkpoint_data = self._load_checkpoint()
         # self.song_list = self.get_songs_from_file(metadata_file, start_index, end_index)
