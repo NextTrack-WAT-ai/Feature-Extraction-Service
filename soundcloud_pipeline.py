@@ -167,10 +167,15 @@ class SoundCloudScraper:
         try:
             logging.info("Setting up Selenium WebDriver for SoundCloudScraper...")
             chrome_options = Options()
-            chrome_options.add_argument("--headless")  # Consider headless for performance
+            chrome_options.add_argument("--headless=new")  # Consider headless for performance
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--disable-background-networking")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-translate")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
             chrome_options.add_argument(f'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
 
             # Ensure Chrome binary is found (especially on macOS/Linux)
@@ -180,7 +185,7 @@ class SoundCloudScraper:
             #     logging.warning("Default Chrome binary location not found or specified. Assuming it's in PATH.")
             #     pass
 
-            service = ChromeService(ChromeDriverManager().install())
+            service = ChromeService(ChromeDriverManager().install())    
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             self.driver.implicitly_wait(5)
             logging.info("SoundCloudScraper WebDriver setup complete.")
