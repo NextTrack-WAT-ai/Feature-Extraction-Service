@@ -17,10 +17,10 @@ import joblib
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 app = Flask(__name__)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
+MODEL_DIR = BASE_DIR / "models"
 
 pipeline = SoundCloudPipeline(start_index=0, end_index=0, download_folder=DOWNLOAD_FOLDER)
 analyzer = pipeline.analyzer
