@@ -54,4 +54,4 @@ EXPOSE 5000
 ENV CHROME_BIN=/usr/bin/google-chrome
 
 # Command to run your app (adjust if your entrypoint script or filename differs)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "features_api:app", "--workers=1", "--threads=4"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "features_api:app", "--workers=1", "--threads=1"]
