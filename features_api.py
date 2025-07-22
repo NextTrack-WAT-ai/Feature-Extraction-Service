@@ -1,18 +1,17 @@
-
 import os
 import logging
 import numpy as np
-import pandas as pd
+import gc
 from pathlib import Path
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 
 import sys
-from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, SoundCloudPipeline
-from run_pipeline import load_pipelines, vector_from_feats, bounded_targets
+from run_pipeline import vector_from_feats, bounded_targets
+import joblib
 
 # ── Config ──────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -21,16 +20,15 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-MODEL_DIR = "models"
+MODEL_DIR = BASE_DIR / "models"
 
-# METADATA_CSV = BASE_DIR / "music_info_cleaned.csv"
 pipeline = SoundCloudPipeline(start_index=0, end_index=0, download_folder=DOWNLOAD_FOLDER)
 analyzer = pipeline.analyzer
-models = load_pipelines(model_dir=MODEL_DIR)
 
-# df = pd.read_csv(METADATA_CSV)
-# name_to_tid = {f"{r['artist']} - {r['name']}": r["track_id"] for _, r in df.iterrows()}
-# targets = {r["track_id"]: r.drop(["track_id", "artist", "name"]).to_dict() for _, r in df.iterrows()}
+# Helper: Load one model on demand
+def load_model(target):
+    model_path = MODEL_DIR / f"model_{target}.joblib"
+    return joblib.load(model_path)
 
 # ── Single Track Endpoint ───────────────────────
 @app.route('/extract_features', methods=['POST'])
@@ -107,7 +105,7 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
         audio_file = Path(audio_path)
         logging.info(f"Downloaded: {audio_file}")
 
-        # Extract base features
+        # Extract base features (consider trimming or downsampling here if possible)
         base_feats = analyzer.precompute_base_features(str(audio_file))
         if base_feats is None:
             raise ValueError("Base feature extraction failed")
@@ -117,24 +115,38 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
             logging.info("=== Base Features ===")
             pprint.pprint(base_feats)
 
-        # Predict
+        # Predict — load models one by one to save memory
         predictions = {}
-        for target, pipe in models.items():
-            X_raw = vector_from_feats(base_feats, target)
 
-            if X_raw is None or np.isnan(X_raw).any() or X_raw.shape[1] == 0:
+        # Define all targets you want predictions for
+        targets_to_predict = bounded_targets.union({
+            "danceability", "energy", "acousticness", "valence", "tempo", "loudness",
+            "instrumentalness", "speechiness", "liveness", "key"
+        })
+
+        for target in targets_to_predict:
+            try:
+                model = load_model(target)
+            except Exception as e:
+                logging.warning(f"Failed to load model {target}: {e}")
                 predictions[target] = None
                 continue
 
-            pred = pipe.predict(X_raw)[0]
-            if target == "key":
-                pred = int(round(pred)) % 12
-            elif target in bounded_targets:
-                pred = float(np.clip(pred, 0, 1))
+            X_raw = vector_from_feats(base_feats, target)
+            if X_raw is None or np.isnan(X_raw).any() or X_raw.shape[1] == 0:
+                predictions[target] = None
             else:
-                pred = float(pred)
+                pred = model.predict(X_raw)[0]
+                if target == "key":
+                    pred = int(round(pred)) % 12
+                elif target in bounded_targets:
+                    pred = float(np.clip(pred, 0, 1))
+                else:
+                    pred = float(pred)
+                predictions[target] = pred
 
-            predictions[target] = pred
+            del model
+            gc.collect()
 
         result = {"track": track_key, "features": predictions}
         return result if return_dict else (jsonify(predictions), 200)
@@ -152,7 +164,7 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
             except Exception as e:
                 logging.warning(f"Could not delete {audio_file}: {e}")
 
+
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))  # Railway default port fallback
     app.run(host="0.0.0.0", port=port)
