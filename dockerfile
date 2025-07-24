@@ -1,23 +1,23 @@
-# Use an official Python runtime as base image
 FROM python:3.10-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsndfile1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
 WORKDIR /app
 
-# Copy project files
-COPY . .
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    chromium-driver \
+    libglib2.0-0 libnss3 libgconf-2-4 libfontconfig1 libxss1 libappindicator3-1 libasound2 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port
-EXPOSE 5000
+# Copy app code
+COPY . .
 
-# Run the service
+# Runtime environment variables
+ENV PORT=8080
+
 CMD ["python", "app.py"]
