@@ -1,9 +1,10 @@
 beautifulsoup4==4.13.4
 Flask==3.1.1
 joblib==1.4.2
-librosa==0.11.0
 lxml==4.9.3
-numpy==1.24.4
+numpy==1.23.5
+numba==0.56.4
+librosa==0.10.1
 pandas==2.3.1
 Requests==2.32.4
 scipy==1.11.4
