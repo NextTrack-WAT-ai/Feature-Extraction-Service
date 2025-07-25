@@ -478,7 +478,10 @@ class SpotifyFeaturesTunable:
                 logging.warning("[ffmpeg-info] Timed out")
 
             try:
-                y, sr = load_audio_with_timeout(file_path, self.sample_rate)
+                # y, sr = load_audio_with_timeout(file_path, self.sample_rate)
+                import soundfile as sf
+                y, sr = sf.read(file_path)
+
             except TimeoutError as e:
                 logging.warning(str(e))
                 try:
