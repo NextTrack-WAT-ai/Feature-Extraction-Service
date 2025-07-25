@@ -653,18 +653,23 @@ class SpotifyFeaturesTunable:
             onset_rate   = len(onset_frames) / duration_sec if duration_sec > 0 else 0.0
             logging.info("[precompute_base_features] Computed liveness/decay/onset features")
 
+
             # ------------------------------------------------------------
             # 8.  Key profile
             # ------------------------------------------------------------
-            chroma = librosa.feature.chroma_cqt(
-                y=y_h, sr=sr, bins_per_octave=36, n_chroma=12, tuning=0.0
-            )
-            chroma_smooth    = np.minimum(1.0,
-                                librosa.decompose.nn_filter(chroma,
-                                                            aggregate=np.median,
-                                                            metric='cosine'))
-            key_profile      = chroma_smooth.sum(axis=1).tolist()
-            logging.info("[precompute_base_features] Computed key profile")
+            if len(y_h) >= 2048:
+                chroma = librosa.feature.chroma_cqt(
+                    y=y_h, sr=sr, bins_per_octave=36, n_chroma=12, tuning=0.0
+                )
+                chroma_smooth = np.minimum(1.0,
+                    librosa.decompose.nn_filter(chroma,
+                        aggregate=np.median,
+                        metric='cosine'))
+                key_profile = chroma_smooth.sum(axis=1).tolist()
+                logging.info("[precompute_base_features] Computed key profile")
+            else:
+                key_profile = [0.0] * 12
+                logging.warning(f"Audio too short for key profile calculation: len(y_h)={len(y_h)} < 2048")
 
             # ------------------------------------------------------------
             # 9. Extra features for acousticness & speechiness tuning
