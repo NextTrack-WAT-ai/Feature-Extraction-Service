@@ -691,9 +691,20 @@ class SpotifyFeaturesTunable:
             spectral_flux_mean = float(np.mean(spectral_flux))
             spectral_flux_var  = float(np.var(spectral_flux))
 
+
             # Delta MFCC mean
-            mfcc_delta = librosa.feature.delta(mfcc)
-            mfcc_delta_mean = float(np.mean(mfcc_delta))
+            if mfcc.shape[1] >= 3:
+                # width must be odd and <= mfcc.shape[1]
+                width = 9 if mfcc.shape[1] >= 9 else (mfcc.shape[1] if mfcc.shape[1] % 2 == 1 else mfcc.shape[1] - 1)
+                if width >= 3:
+                    mfcc_delta = librosa.feature.delta(mfcc, width=width)
+                    mfcc_delta_mean = float(np.mean(mfcc_delta))
+                else:
+                    mfcc_delta_mean = 0.0
+                    logging.warning(f"MFCC too short for delta mean calculation: n_frames={mfcc.shape[1]}")
+            else:
+                mfcc_delta_mean = 0.0
+                logging.warning(f"MFCC too short for delta mean calculation: n_frames={mfcc.shape[1]}")
 
             # Spectral rolloff at 90th percentile
             spectral_rolloff_90 = float(np.percentile(librosa.feature.spectral_rolloff(y=y, sr=sr)[0], 90))
