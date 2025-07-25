@@ -411,32 +411,40 @@ class SpotifyFeaturesTunable:
     def precompute_base_features(self, file_path: str) -> dict:
         """Runs all expensive librosa computations once and returns raw features."""
         try:
+            logging.info(f"[precompute_base_features] Loading file: {file_path}")
             # ------------------------------------------------------------
             # 1.  Load & harmonic/percussive separation
             # ------------------------------------------------------------
             y, sr = librosa.load(file_path, sr=self.sample_rate)
             y = np.ascontiguousarray(y, dtype=np.float32)
+            logging.info(f"[precompute_base_features] Loaded audio: shape={y.shape}, sr={sr}")
 
             # If y is stereo (multi-channel), convert to mono
             if y.ndim > 1:
                 y = np.mean(y, axis=0)
+                logging.info("[precompute_base_features] Converted to mono")
             y_h, y_p = librosa.effects.hpss(y)
+            logging.info("[precompute_base_features] Performed HPSS")
             onset_env = librosa.onset.onset_strength(y=y_p, sr=sr)
+            logging.info("[precompute_base_features] Computed onset envelope")
 
             # ------------------------------------------------------------
             # 2.  Tempo & beat regularity
             # ------------------------------------------------------------
             try:
                 tempo_raw, beats = librosa.beat.beat_track(y=y_p, sr=sr)
+                logging.info(f"[precompute_base_features] Beat track: tempo={tempo_raw}, beats={len(beats)}")
             except TypeError:
                 tempo_raw = librosa.beat.tempo(y=y_p, sr=sr)[0]
                 beats = []
+                logging.info(f"[precompute_base_features] Beat tempo fallback: tempo={tempo_raw}")
             times = librosa.frames_to_time(beats, sr=sr)
             if len(times) > 1:
                 diffs     = np.diff(times)
                 beat_reg  = 1.0 - min(1.0, np.std(diffs) / (np.mean(diffs) + 1e-8))
             else:
                 beat_reg  = 0.0
+            logging.info(f"[precompute_base_features] Beat regularity: {beat_reg}")
 
             # ------------------------------------------------------------
             # 3.  RMS / spectrum-level descriptors
@@ -444,6 +452,7 @@ class SpotifyFeaturesTunable:
             spec        = np.abs(librosa.stft(y))
             freqs       = librosa.fft_frequencies(sr=sr)
             mean_spec   = float(np.mean(spec) + 1e-8)
+            logging.info("[precompute_base_features] Computed STFT and spectrum")
 
             bass_spec   = spec[freqs <= 250]
             bass_raw    = float(np.mean(bass_spec) / mean_spec) if bass_spec.size else 0.0
@@ -467,6 +476,7 @@ class SpotifyFeaturesTunable:
                 contrast_ratio_raw = low_mean / (high_mean + 1e-8)
             else:
                 contrast_ratio_raw = 0.5   # fallback
+            logging.info("[precompute_base_features] Computed spectral features")
 
             # ------------------------------------------------------------
             # 4.  Harmonic / Percussive & MFCC stats
@@ -495,6 +505,7 @@ class SpotifyFeaturesTunable:
             except Exception as e:
                 logging.warning("piptrack failed for %s: %s", file_path, e)
                 pitch_var_raw = 0.0
+            logging.info("[precompute_base_features] Computed MFCC and pitch features")
             # ------------------------------------------------------------
             # 5.  Zero-crossing & additional timbre features
             # ------------------------------------------------------------
@@ -513,7 +524,7 @@ class SpotifyFeaturesTunable:
             frame_zc = (np.abs(np.diff(np.sign(frames), axis=0)) > 0).sum(axis=0)
             zcr_per_frame = frame_zc / FRAME_LEN          # normalise
             zcr_var       = float(np.var(zcr_per_frame))
-
+            logging.info("[precompute_base_features] Computed ZCR features")
 
             spectral_rolloff      = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
             spectral_rolloff_50   = float(np.percentile(spectral_rolloff, 50))
@@ -526,6 +537,7 @@ class SpotifyFeaturesTunable:
             mid_mask          = (freqs >= 300) & (freqs <= 3400)
             mid_band          = spec[mid_mask, :]
             mid_band_energy   = float(np.mean(mid_band) / mean_spec) if mid_band.size else 0.0
+            logging.info("[precompute_base_features] Computed mid-band energy")
 
             # ------------------------------------------------------------
             # 7.  Liveness / decay & onset rate
@@ -539,6 +551,7 @@ class SpotifyFeaturesTunable:
             onset_frames = librosa.onset.onset_detect(y=y_p, sr=sr)
             duration_sec = float(librosa.get_duration(y=y, sr=sr))
             onset_rate   = len(onset_frames) / duration_sec if duration_sec > 0 else 0.0
+            logging.info("[precompute_base_features] Computed liveness/decay/onset features")
 
             # ------------------------------------------------------------
             # 8.  Key profile
@@ -551,6 +564,7 @@ class SpotifyFeaturesTunable:
                                                             aggregate=np.median,
                                                             metric='cosine'))
             key_profile      = chroma_smooth.sum(axis=1).tolist()
+            logging.info("[precompute_base_features] Computed key profile")
 
             # ------------------------------------------------------------
             # 9. Extra features for acousticness & speechiness tuning
@@ -595,10 +609,12 @@ class SpotifyFeaturesTunable:
                 hnr = float(np.mean(S_harm) / (np.mean(noise_est) + 1e-8))
             except Exception as e:
                 logging.warning("HNR computation failed for %s: %s", file_path, e)
+            logging.info("[precompute_base_features] Computed extra acousticness/speechiness features")
 
             # ------------------------------------------------------------
             # 10.  Assemble & return
             # ------------------------------------------------------------
+            logging.info("[precompute_base_features] Assembling feature dictionary")
             return {
                 # rhythm / dynamics
                 'tempo_raw': tempo_raw, 'beat_reg': beat_reg, 'pulse_raw': pulse_raw,
@@ -641,6 +657,7 @@ class SpotifyFeaturesTunable:
             }
 
         except Exception as e:
+            logging.error(f"[precompute_base_features] Exception for {file_path}: {e}", exc_info=True)
             raise
 
     def extract_features(self, file_path: str) -> dict:
