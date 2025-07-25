@@ -570,7 +570,8 @@ class SpotifyFeaturesTunable:
             mfcc_var_raw  = float(np.var(mfcc[2:8, :], axis=1).mean())
             mfcc_means    = np.mean(mfcc[1:4, :], axis=1)      # 3-element vector
 
-            mfcc_delta_var_raw = float(np.var(librosa.feature.delta(mfcc), axis=1).mean())
+            width = min(9, mfcc.shape[1])
+            mfcc_delta_var_raw = float(np.var(librosa.feature.delta(mfcc, width=width), axis=1).mean())
 
             try:
                 pitches, mags = librosa.piptrack(y=y, sr=sr)
