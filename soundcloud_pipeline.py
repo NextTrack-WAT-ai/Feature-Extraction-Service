@@ -431,6 +431,24 @@ class SpotifyFeaturesTunable:
                 raise RuntimeError(f"[load_audio_with_timeout] Failed to load audio: {return_dict['error']}")
             return return_dict["y"], return_dict["sr"]
 
+        from pydub import AudioSegment
+        import numpy as np
+
+        def fallback_load_with_pydub(file_path, sr):
+            try:
+                audio = AudioSegment.from_file(file_path)
+                samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+                if audio.channels == 2:
+                    samples = samples.reshape((-1, 2)).mean(axis=1)
+                samples /= np.iinfo(audio.array_type).max
+                if sr and audio.frame_rate != sr:
+                    samples = librosa.resample(samples, orig_sr=audio.frame_rate, target_sr=sr)
+                    return samples, sr
+                return samples, audio.frame_rate
+            except Exception as e:
+                logging.error(f"[pydub fallback] Failed: {e}")
+                raise
+
         """Runs all expensive librosa computations once and returns raw features."""
         try:
             logging.info(f"[precompute_base_features] Loading file: {file_path}")
@@ -450,11 +468,28 @@ class SpotifyFeaturesTunable:
                 logging.error("[ffmpeg-check] ffmpeg hung while validating audio")
                 return {"error": "ffmpeg hang"}
 
+            info_cmd = [
+                "ffmpeg", "-i", file_path
+            ]
+            try:
+                result = subprocess.run(info_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, timeout=10)
+                logging.info(f"[ffmpeg-info] {result.stderr.decode()}")
+            except subprocess.TimeoutExpired:
+                logging.warning("[ffmpeg-info] Timed out")
+
             try:
                 y, sr = load_audio_with_timeout(file_path, self.sample_rate)
             except TimeoutError as e:
-                logging.error(str(e))
-                return {"error": "audio load timeout"}
+                logging.warning(str(e))
+                try:
+                    y, sr = fallback_load_with_pydub(file_path, self.sample_rate)
+                    logging.info("[load_audio_with_timeout] Fallback to pydub successful.")
+                except Exception as fallback_error:
+                    logging.error(f"[load_audio_with_timeout] Fallback failed: {fallback_error}")
+                    return {"error": "audio decode failure"}
+            except Exception as unexpected:
+                logging.error(f"Unexpected load error: {unexpected}")
+                return {"error": "audio decode failure"}
             except RuntimeError as e:
                 logging.error(str(e))
                 return {"error": "audio decode failure"}

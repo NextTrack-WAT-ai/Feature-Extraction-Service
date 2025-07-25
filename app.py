@@ -52,7 +52,14 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
         # Send to inference service
         print("Sending post request to inference service at ", INFERENCE_URL)
         resp = requests.post(INFERENCE_URL, json={"track": track_key, "features": base_feats})
-        return resp.json() if return_dict else (jsonify(resp.json()), resp.status_code)
+        try:
+            resp_json = resp.json()
+        except requests.exceptions.JSONDecodeError:
+            logging.error(f"Non-JSON response: {resp.text}")
+            resp_json = {"error": "Internal server error during feature extraction"}
+            return jsonify(resp_json), 500
+
+        return resp_json if return_dict else (jsonify(resp_json), resp.status_code)
 
     except Exception as e:
         logging.exception(f"Error in track: {track_key}")
