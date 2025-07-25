@@ -49,9 +49,22 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
             logging.info("=== Base Features ===")
             pprint.pprint(base_feats)
 
+        # Convert all numpy types in base_feats to native Python types
+        def to_python_type(obj):
+            if isinstance(obj, np.generic):
+                return obj.item()
+            elif isinstance(obj, dict):
+                return {k: to_python_type(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple, np.ndarray)):
+                return [to_python_type(x) for x in obj]
+            else:
+                return obj
+
+        base_feats_py = to_python_type(base_feats)
+
         # Send to inference service
         print("Sending post request to inference service at ", INFERENCE_URL)
-        resp = requests.post(INFERENCE_URL, json={"track": track_key, "features": base_feats})
+        resp = requests.post(INFERENCE_URL, json={"track": track_key, "features": base_feats_py})
         try:
             resp_json = resp.json()
         except requests.exceptions.JSONDecodeError:
