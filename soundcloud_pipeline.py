@@ -304,7 +304,6 @@ class YTDLPDownloader:
                 'logger': logging.getLogger('yt-dlp'),
                 'noprogress': True,
                 'noplaylist': True,
-                'ffmpeg_location': 'C:\\ProgramData\\chocolatey\\bin',
                  # Add cookie file if needed for restricted content (requires browser addon like Get cookies.txt LOCALLY)
                  # 'cookiefile': 'path/to/your/cookies.txt',
             }
