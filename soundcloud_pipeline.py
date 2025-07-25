@@ -603,18 +603,21 @@ class SpotifyFeaturesTunable:
             zero_crossings = int(np.sum(np.abs(np.diff(np.sign(y)))) / 2)
             zcr_raw        = zero_crossings / len(y)
 
+
             # 5-b)  PER-FRAME ZCR → variance
             # Frame the signal (same defaults librosa would use)
             FRAME_LEN   = 2048
             HOP_LEN     = 512
-            frames      = librosa.util.frame(y, frame_length=FRAME_LEN,
-                                            hop_length=HOP_LEN)
-
-            # Count zero-crossings in each column (= one frame)
-            frame_zc = (np.abs(np.diff(np.sign(frames), axis=0)) > 0).sum(axis=0)
-            zcr_per_frame = frame_zc / FRAME_LEN          # normalise
-            zcr_var       = float(np.var(zcr_per_frame))
-            logging.info("[precompute_base_features] Computed ZCR features")
+            if len(y) >= FRAME_LEN:
+                frames = librosa.util.frame(y, frame_length=FRAME_LEN, hop_length=HOP_LEN)
+                # Count zero-crossings in each column (= one frame)
+                frame_zc = (np.abs(np.diff(np.sign(frames), axis=0)) > 0).sum(axis=0)
+                zcr_per_frame = frame_zc / FRAME_LEN          # normalise
+                zcr_var       = float(np.var(zcr_per_frame))
+                logging.info("[precompute_base_features] Computed ZCR features")
+            else:
+                zcr_var = 0.0
+                logging.warning(f"Audio too short for per-frame ZCR calculation: len(y)={len(y)} < {FRAME_LEN}")
 
             spectral_rolloff      = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
             spectral_rolloff_50   = float(np.percentile(spectral_rolloff, 50))
