@@ -566,12 +566,21 @@ class SpotifyFeaturesTunable:
             harmonic_ratio_raw            = hr / (hr + pr + 1e-8)
             harmonic_to_percussive_ratio  = hr / (pr + 1e-8)
 
-            mfcc          = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
+            mfcc          = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
             mfcc_var_raw  = float(np.var(mfcc[2:8, :], axis=1).mean())
             mfcc_means    = np.mean(mfcc[1:4, :], axis=1)      # 3-element vector
 
-            width = min(9, mfcc.shape[1])
-            mfcc_delta_var_raw = float(np.var(librosa.feature.delta(mfcc, width=width), axis=1).mean())
+            n_frames = mfcc.shape[1]
+
+            if n_frames >= 9:
+                width = 9
+            elif n_frames >= 3:
+                width = n_frames if n_frames % 2 == 1 else n_frames - 1
+                # width must be odd and >= 3
+                mfcc_delta_var_raw = float(np.var(librosa.feature.delta(mfcc, width=width), axis=1).mean())
+            else:
+                logging.warning(f"MFCC too short for delta calculation: n_frames={n_frames}")
+                mfcc_delta_var_raw = 0.0
 
             try:
                 pitches, mags = librosa.piptrack(y=y, sr=sr)
