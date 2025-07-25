@@ -415,6 +415,13 @@ class SpotifyFeaturesTunable:
             # ------------------------------------------------------------
             # 1.  Load & harmonic/percussive separation
             # ------------------------------------------------------------
+            import time
+
+            start = time.time()
+            exists = os.path.exists(file_path)
+            size = os.path.getsize(file_path) if exists else 0
+            logging.info(f"[check] Exists={exists}, Size={size}, Time={time.time() - start:.2f}s")
+
             y, sr = librosa.load(file_path, sr=self.sample_rate)
             y = np.ascontiguousarray(y, dtype=np.float32)
             logging.info(f"[precompute_base_features] Loaded audio: shape={y.shape}, sr={sr}")
