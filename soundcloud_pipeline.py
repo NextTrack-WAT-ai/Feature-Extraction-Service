@@ -637,9 +637,16 @@ class SpotifyFeaturesTunable:
             # ------------------------------------------------------------
             dyn_range_liveness_raw = float(np.percentile(rms, 95) - np.percentile(rms, 10))
 
-            seg         = librosa.util.frame(onset_env, frame_length=10, hop_length=1)
-            slope       = float(stats.linregress(np.arange(seg.shape[1]), seg.mean(axis=0))[0]) if seg.shape[1] > 1 else 0.0
-            decay_raw   = 1.0 - self._normalize(abs(slope), 0.001, 0.1, 0, 1)   # ensure scalar
+
+            # Only compute decay if onset_env is long enough
+            if len(onset_env) >= 10:
+                seg = librosa.util.frame(onset_env, frame_length=10, hop_length=1)
+                slope = float(stats.linregress(np.arange(seg.shape[1]), seg.mean(axis=0))[0]) if seg.shape[1] > 1 else 0.0
+                decay_raw = 1.0 - self._normalize(abs(slope), 0.001, 0.1, 0, 1)   # ensure scalar
+                logging.info("[precompute_base_features] Computed decay feature")
+            else:
+                decay_raw = 0.0
+                logging.warning(f"Onset envelope too short for decay calculation: len(onset_env)={len(onset_env)} < 10")
 
             onset_frames = librosa.onset.onset_detect(y=y_p, sr=sr)
             duration_sec = float(librosa.get_duration(y=y, sr=sr))
