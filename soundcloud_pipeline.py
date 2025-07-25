@@ -408,20 +408,56 @@ class SpotifyFeaturesTunable:
         return (v - min_val) / (max_val - min_val) * (new_max - new_min) + new_min
 
     def precompute_base_features(self, file_path: str) -> dict:
+        import multiprocessing as mp
+
+        def _load_audio_worker(path, sr, return_dict):
+            try:
+                y, sr = librosa.load(path, sr=sr)
+                return_dict["y"] = y
+                return_dict["sr"] = sr
+            except Exception as e:
+                return_dict["error"] = str(e)
+
+        def load_audio_with_timeout(path, sr, timeout=10):
+            manager = mp.Manager()
+            return_dict = manager.dict()
+            p = mp.Process(target=_load_audio_worker, args=(path, sr, return_dict))
+            p.start()
+            p.join(timeout)
+            if p.is_alive():
+                p.terminate()
+                raise TimeoutError(f"[load_audio_with_timeout] Timeout while loading {path}")
+            if "error" in return_dict:
+                raise RuntimeError(f"[load_audio_with_timeout] Failed to load audio: {return_dict['error']}")
+            return return_dict["y"], return_dict["sr"]
+
         """Runs all expensive librosa computations once and returns raw features."""
         try:
             logging.info(f"[precompute_base_features] Loading file: {file_path}")
             # ------------------------------------------------------------
             # 1.  Load & harmonic/percussive separation
             # ------------------------------------------------------------
-            import time
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["ffmpeg", "-v", "error", "-i", file_path, "-f", "null", "-"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=10
+                )
+                logging.info(f"[ffmpeg-check] stderr={result.stderr.decode()}")
+            except subprocess.TimeoutExpired:
+                logging.error("[ffmpeg-check] ffmpeg hung while validating audio")
+                return {"error": "ffmpeg hang"}
 
-            start = time.time()
-            exists = os.path.exists(file_path)
-            size = os.path.getsize(file_path) if exists else 0
-            logging.info(f"[check] Exists={exists}, Size={size}, Time={time.time() - start:.2f}s")
-
-            y, sr = librosa.load(file_path, sr=self.sample_rate)
+            try:
+                y, sr = load_audio_with_timeout(file_path, self.sample_rate)
+            except TimeoutError as e:
+                logging.error(str(e))
+                return {"error": "audio load timeout"}
+            except RuntimeError as e:
+                logging.error(str(e))
+                return {"error": "audio decode failure"}
             y = np.ascontiguousarray(y, dtype=np.float32)
             logging.info(f"[precompute_base_features] Loaded audio: shape={y.shape}, sr={sr}")
 
