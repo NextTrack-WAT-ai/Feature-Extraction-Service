@@ -50,6 +50,7 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
             pprint.pprint(base_feats)
 
         # Send to inference service
+        print("Sending post request to inference service at ", INFERENCE_URL)
         resp = requests.post(INFERENCE_URL, json={"track": track_key, "features": base_feats})
         return resp.json() if return_dict else (jsonify(resp.json()), resp.status_code)
 
