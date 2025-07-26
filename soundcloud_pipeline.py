@@ -343,6 +343,10 @@ class YouTubeCookieManager:
         """
         Saves cookies to a Netscape format file compatible with yt-dlp.
         """
+        allowed_domains = {
+            "youtube.com", ".youtube.com", "youtube-nocookie.com", "googlevideo.com"
+        }
+
         if filepath is None:
             temp = tempfile.NamedTemporaryFile(delete=False, suffix="_cookies.txt")
             filepath = Path(temp.name)
@@ -351,16 +355,23 @@ class YouTubeCookieManager:
             f.write("# Netscape HTTP Cookie File\n")
             for c in cookies:
                 domain = c.get("domain", ".youtube.com")
+                if not any(domain.endswith(allowed) for allowed in allowed_domains):
+                    continue  # Skip irrelevant domains like accounts.google.com
+
                 include_subdomains = "TRUE"
                 path = c.get("path", "/")
                 secure = "TRUE" if c.get("secure") else "FALSE"
-                expires = int(c.get("expires", 0))
+                expires = c.get("expires")
+
+                if not isinstance(expires, int) or expires <= 0:
+                    continue  # Skip cookies with invalid expiry times
+
                 name = c.get("name")
                 value = c.get("value")
                 if name and value:
                     f.write(f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}\n")
 
-        logging.info(f"Saved cookies to: {filepath}")
+        logging.info(f"Saved filtered cookies to: {filepath}")
         return filepath
 
     def get_cookie_file_for_ytdlp(self) -> Path:
