@@ -44,8 +44,8 @@ class FeatureRegressor:
             return self.models[feat].coef_, self.models[feat].intercept_
         return None, None
 import os
-os.environ.setdefault("NUMBA_DISABLE_INTEL_SVML", "1")
-os.environ.setdefault("NUMBA_DISABLE_JIT",  "1")
+os.environ["NUMBA_DISABLE_INTEL_SVML"] = "1"
+os.environ["NUMBA_DISABLE_JIT"] = "1"
 import json
 import logging
 import re
@@ -294,42 +294,55 @@ class YouTubeCookieManager:
         self.browserless_api_key = browserless_api_key
         self.browserless_url = f"https://production-sfo.browserless.io/function?token={self.browserless_api_key}"
 
-    def _get_browser_context_cookies(self, url: str = "https://youtube.com") -> list:
+    def _get_browser_context_cookies(self, url="https://youtube.com") -> list:
         logging.info("Requesting YouTube cookies via browserless...")
 
-        js_script = f"""
-        export default async function({{ page, context }}) {{
-          try {{
-            await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
-            await page.goto("{url}", {{
-              waitUntil: "domcontentloaded",
-              timeout: 60000
-            }});
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            const cookies = await context.cookies();
-            return {{
-              data: cookies,
-              type: "application/json"
-            }};
-          }} catch (err) {{
-            return {{
-              data: "ERROR: " + err.toString(),
-              type: "text/plain"
-            }};
-          }}
-        }}
-        """
+        script = f"""
+            export default async function({{ page }}) {{
+                try {{
+                    await page.goto("{url}", {{
+                        waitUntil: "domcontentloaded",
+                        timeout: 60000
+                    }});
+                    await new Promise(resolve => setTimeout(resolve, 3000));  // Wait 3 seconds
+                    const cookies = await page.cookies();
+                    return {{ cookies }};
+                }} catch (err) {{
+                    return {{
+                        error: err.toString()
+                    }};
+                }}
+            }}
+            """
 
-        response = requests.post(self.browserless_url, json={"code": js_script})
-        response.raise_for_status()
 
-        json_data = response.json()
-        if isinstance(json_data, dict) and "data" in json_data and isinstance(json_data["data"], list):
-            logging.info(f"Received {len(json_data['data'])} cookies from Browserless")
-            return json_data["data"]
-        else:
-            raise RuntimeError("Failed to retrieve cookies from browserless response")
+        try:
+            headers = {
+                "Content-Type": "application/javascript"
+            }
+            response = requests.post(
+                self.browserless_url,
+                headers=headers,
+                data=script
+            )
+            response.raise_for_status()
 
+            json_data = response.json()
+            if "error" in json_data:
+                raise RuntimeError(f"Browserless script error: {json_data['error']}")
+
+            cookies = json_data.get("cookies")
+            if not cookies:
+                raise RuntimeError("Failed to retrieve cookies from browserless response")
+
+            logging.info(f"Received {len(cookies)} cookies from Browserless")
+            return cookies
+
+        except Exception as e:
+            logging.error(f"Browserless cookie request failed: {e}")
+            raise
+
+    
     def save_cookies_as_netscape(self, cookies: list, filepath: Optional[Path] = None) -> Path:
         """
         Saves cookies to file in Netscape format used by yt-dlp.
