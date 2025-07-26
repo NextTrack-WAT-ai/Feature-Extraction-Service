@@ -72,6 +72,7 @@ from scipy.optimize import differential_evolution
 from scipy.optimize import minimize
 import joblib
 from sklearn.preprocessing import StandardScaler
+from scipy.ndimage import median_filter
 import traceback
 
 # --- Configuration ---
@@ -646,13 +647,8 @@ class SpotifyFeaturesTunable:
             # 8.  Key profile
             # ------------------------------------------------------------
             if len(y_h) >= 2048:
-                chroma = librosa.feature.chroma_cqt(
-                    y=y_h, sr=sr, bins_per_octave=36, n_chroma=12, tuning=0.0
-                )
-                chroma_smooth = np.minimum(1.0,
-                    librosa.decompose.nn_filter(chroma,
-                        aggregate=np.median,
-                        metric='cosine'))
+                chroma = librosa.feature.chroma_stft(y=y_h, sr=sr, n_chroma=12)
+                chroma_smooth = median_filter(chroma, size=(1, 9))
                 key_profile = chroma_smooth.sum(axis=1).tolist()
                 logging.info("[precompute_base_features] Computed key profile")
             else:
