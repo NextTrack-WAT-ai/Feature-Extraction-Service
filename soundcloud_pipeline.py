@@ -86,6 +86,8 @@ REQUEST_TIMEOUT = 15  # seconds for HTTP requests
 SELENIUM_TIMEOUT = 60 # Increased timeout seconds for Selenium waits
 MATCH_THRESHOLD = 75  # Minimum fuzzy match score (0-100)
 REQUEST_DELAY = 2     # seconds delay between requests
+MAX_DURATION = 60
+TARGET_SR = 22050     # Hz
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, 
@@ -480,6 +482,17 @@ class SpotifyFeaturesTunable:
             if y.ndim > 1:
                 y = np.mean(y, axis=1)
                 logging.info("[precompute_base_features] Converted to mono")
+
+            if sr != TARGET_SR:
+                y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
+                sr = TARGET_SR
+                logging.info(f"[precompute_base_features] Resampled audio to {TARGET_SR} Hz")
+
+            duration_sec = librosa.get_duration(y=y, sr=sr)
+            if duration_sec > MAX_DURATION:
+                max_samples = int(MAX_DURATION * sr)
+                y = y[:max_samples]
+                logging.info(f"[precompute_base_features] Clipped audio to {MAX_DURATION} seconds")
             y_h, y_p = librosa.effects.hpss(y)
             logging.info("[precompute_base_features] Performed HPSS")
             onset_env = librosa.onset.onset_strength(y=y_p, sr=sr)
@@ -626,7 +639,6 @@ class SpotifyFeaturesTunable:
                 logging.warning(f"Onset envelope too short for decay calculation: len(onset_env)={len(onset_env)} < 10")
 
             onset_frames = librosa.onset.onset_detect(y=y_p, sr=sr)
-            duration_sec = float(librosa.get_duration(y=y, sr=sr))
             onset_rate   = len(onset_frames) / duration_sec if duration_sec > 0 else 0.0
             logging.info("[precompute_base_features] Computed liveness/decay/onset features")
 
