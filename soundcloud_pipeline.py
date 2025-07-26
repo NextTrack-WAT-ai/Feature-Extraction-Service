@@ -76,6 +76,7 @@ from scipy.ndimage import median_filter
 import traceback
 from pytube import YouTube
 from typing import Optional
+from playwright.sync_api import sync_playwright
 import tempfile
 
 # --- Configuration ---
@@ -286,69 +287,41 @@ class SoundCloudScraper:
         logging.warning("No good match found.")
         return None
 
+
 class YouTubeCookieManager:
     """
-    Fetches YouTube cookies using Browserless and outputs them in a format compatible with yt-dlp.
-    Uses a pre-authenticated storageState.json file to simulate a logged-in YouTube session.
+    Fetches YouTube cookies by connecting to Browserless over CDP with Playwright,
+    loading a storageState file, and returning cookies in yt-dlp-compatible Netscape format.
     """
-    def __init__(self, browserless_api_key: str, storage_state_url: str):
+    def __init__(self, browserless_api_key: str, storage_state_path: Path):
         self.browserless_api_key = browserless_api_key
-        self.browserless_url = f"https://production-sfo.browserless.io/function?token={self.browserless_api_key}"
-        self.storage_state_url = storage_state_url
+        self.storage_state_path = storage_state_path
+        self.cdp_endpoint = f"wss://production-sfo.browserless.io?token={self.browserless_api_key}"
 
-    def _get_browser_context_cookies(self, url="https://youtube.com") -> list:
-        logging.info("Requesting YouTube cookies via browserless with storageState...")
+    def _get_browser_context_cookies(self, url: str = "https://youtube.com") -> list:
+        logging.info("Requesting YouTube cookies via Browserless Playwright CDP connection...")
 
-        script = f"""
-            export default async function({{ browser }}) {{
-                try {{
-                    const context = await browser.newContext({{
-                        storageState: "{self.storage_state_url}"
-                    }});
-                    const page = await context.newPage();
-                    await page.goto("{url}", {{
-                        waitUntil: "domcontentloaded",
-                        timeout: 60000
-                    }});
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    const cookies = await context.cookies();
-                    return {{ cookies }};
-                }} catch (err) {{
-                    return {{ error: err.toString() }};
-                }}
-            }}
-        """
+        with sync_playwright() as p:
+            # Connect to Browserless via Chrome DevTools Protocol (CDP)
+            browser = p.chromium.connect_over_cdp(self.cdp_endpoint)
 
-        try:
-            headers = {
-                "Content-Type": "application/javascript",
-                "x-browserless-context": "true"
-            }
-            response = requests.post(
-                self.browserless_url,
-                headers=headers,
-                data=script
-            )
-            response.raise_for_status()
+            # Create context using the stored auth state
+            context = browser.new_context(storage_state=str(self.storage_state_path))
 
-            json_data = response.json()
-            if "error" in json_data:
-                raise RuntimeError(f"Browserless script error: {json_data['error']}")
+            page = context.new_page()
+            page.goto(url, wait_until="domcontentloaded")
+            # Optional: Wait a few seconds if needed
+            page.wait_for_timeout(3000)
 
-            cookies = json_data.get("cookies")
-            if not cookies:
-                raise RuntimeError("Failed to retrieve cookies from browserless response")
+            cookies = context.cookies()
+            browser.close()
 
             logging.info(f"Received {len(cookies)} cookies from Browserless")
             return cookies
 
-        except Exception as e:
-            logging.error(f"Browserless cookie request failed: {e}")
-            raise
-    
-    def save_cookies_as_netscape(self, cookies: list, filepath: Optional[Path] = None) -> Path:
+    def save_cookies_as_netscape(self, cookies: list, filepath: Path = None) -> Path:
         """
-        Saves cookies to file in Netscape format used by yt-dlp.
+        Saves cookies to a Netscape format file compatible with yt-dlp.
         """
         if filepath is None:
             temp = tempfile.NamedTemporaryFile(delete=False, suffix="_cookies.txt")
@@ -361,7 +334,7 @@ class YouTubeCookieManager:
                 include_subdomains = "TRUE"
                 path = c.get("path", "/")
                 secure = "TRUE" if c.get("secure") else "FALSE"
-                expires = str(c.get("expires", 0))
+                expires = int(c.get("expires", 0))
                 name = c.get("name")
                 value = c.get("value")
                 if name and value:
