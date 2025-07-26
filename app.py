@@ -111,12 +111,11 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
         row = music_info_df.loc[track_key]
 
         # Build feature dict to match inference model keys
-        feats = {
+        features = {
             "danceability": row["danceability"],
             "energy": row["energy"],
             "key": row["key"],
             "loudness": row["loudness"],
-            "mode": row["mode"],
             "speechiness": row["speechiness"],
             "acousticness": row["acousticness"],
             "instrumentalness": row["instrumentalness"],
@@ -125,10 +124,15 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
             "tempo": row["tempo"],
         }
 
-        # Optionally: convert to native Python types (in case any are NumPy)
-        feats = {k: (v.item() if hasattr(v, "item") else v) for k, v in feats.items()}
+        # Convert to native Python types (avoid numpy floats)
+        features = {k: (v.item() if hasattr(v, "item") else v) for k, v in features.items()}
 
-        return feats if return_dict else (jsonify(feats), 200)
+        result = {
+            "features": features,
+            "track": f"{artist} - {track_name}"
+        }
+
+        return result if return_dict else (jsonify(result), 200)
 
     track_key = f"{artist} - {track_name}"
     audio_file = None
