@@ -75,8 +75,29 @@ from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import median_filter
 import traceback
 from pytube import YouTube
-from pydub import AudioSegment
-from uuid import uuid4
+import pytube.request
+import urllib.request
+
+# Patch urllib to ignore proxies inside pytube requests
+class ProxyIgnoringHandler(urllib.request.ProxyHandler):
+    def proxies(self):
+        return {}
+
+urllib.request.install_opener(
+    urllib.request.build_opener(
+        ProxyIgnoringHandler()
+    )
+)
+
+# Alternatively, patch pytube.request.default_range_fetch to disable proxies param
+original_default_range_fetch = pytube.request.default_range_fetch
+
+def patched_default_range_fetch(*args, **kwargs):
+    if 'proxies' in kwargs:
+        del kwargs['proxies']
+    return original_default_range_fetch(*args, **kwargs)
+
+pytube.request.default_range_fetch = patched_default_range_fetch
 
 # --- Configuration ---
 DOWNLOAD_FOLDER = Path("downloads")
