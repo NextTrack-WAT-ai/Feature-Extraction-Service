@@ -559,7 +559,7 @@ class SpotifyFeaturesTunable:
             mfcc          = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
             mfcc_var_raw  = float(np.var(mfcc[2:8, :], axis=1).mean())
             mfcc_means    = np.mean(mfcc[1:4, :], axis=1)      # 3-element vector
-
+            mfcc_delta_var_raw = 0.0
             n_frames = mfcc.shape[1]
 
             if n_frames >= 9:
@@ -570,7 +570,6 @@ class SpotifyFeaturesTunable:
                 mfcc_delta_var_raw = float(np.var(librosa.feature.delta(mfcc, width=width), axis=1).mean())
             else:
                 logging.warning(f"MFCC too short for delta calculation: n_frames={n_frames}")
-                mfcc_delta_var_raw = 0.0
 
             try:
                 pitches, mags = librosa.piptrack(y=y, sr=sr)
