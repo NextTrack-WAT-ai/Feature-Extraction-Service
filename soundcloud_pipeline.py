@@ -293,7 +293,7 @@ class YouTubeCookieManager:
     Fetches YouTube cookies by connecting to Browserless over CDP with Playwright,
     loading a storageState file, and returning cookies in yt-dlp-compatible Netscape format.
     """
-    def __init__(self, browserless_api_key: str, storage_state_path: Path, storage_state_url: str = None):
+    def __init__(self, browserless_api_key: str, storage_state_url: str = None):
         self.browserless_api_key = browserless_api_key
         self.storage_state_path = storage_state_url
         self.cdp_endpoint = f"wss://production-sfo.browserless.io?token={self.browserless_api_key}"
