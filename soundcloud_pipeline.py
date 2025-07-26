@@ -75,14 +75,27 @@ from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import median_filter
 import traceback
 import pytube.request
-_original_urlopen = pytube.request.urlopen
 
+_original_urlopen = pytube.request.urlopen
 def urlopen_no_proxies(*args, **kwargs):
     if 'proxies' in kwargs:
         del kwargs['proxies']
     return _original_urlopen(*args, **kwargs)
-
 pytube.request.urlopen = urlopen_no_proxies
+
+_original_post = requests.post
+def post_no_proxies(*args, **kwargs):
+    if 'proxies' in kwargs:
+        del kwargs['proxies']
+    return _original_post(*args, **kwargs)
+requests.post = post_no_proxies
+
+_original_get = requests.get
+def get_no_proxies(*args, **kwargs):
+    if 'proxies' in kwargs:
+        del kwargs['proxies']
+    return _original_get(*args, **kwargs)
+requests.get = get_no_proxies
 from pytube import YouTube
 
 # --- Configuration ---
