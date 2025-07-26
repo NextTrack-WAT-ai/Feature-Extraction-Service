@@ -17,3 +17,4 @@ selenium==4.34.2
 thefuzz==0.22.1
 webdriver_manager==4.0.2
 yt_dlp==2025.7.21
+youtube-search-python==1.6.0

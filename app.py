@@ -5,6 +5,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, PytubeDownloader, SoundCloudPipeline
+from youtubesearchpython import VideosSearch
 import requests
 import librosa
 
@@ -47,22 +48,31 @@ def find_and_download_track(artist, track_name, scraper, downloader, pytube_fall
     except Exception as e:
         logging.warning(f"SoundCloud download failed: {e}")
 
-    # Fallback to YouTube
-    yt_url = f"ytsearch1:{artist} {track_name}"
-    path, success = downloader.download_track(yt_url, artist, track_name)
-    if success:
-        duration = get_audio_duration(path)
-        if duration >= min_duration_sec:
-            return path, "youtube"
-        else:
-            logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
-            Path(path).unlink(missing_ok=True)
+    # # Fallback to YouTube
+    # yt_url = f"ytsearch1:{artist} {track_name}"
+    # path, success = downloader.download_track(yt_url, artist, track_name)
+    # if success:
+    #     duration = get_audio_duration(path)
+    #     if duration >= min_duration_sec:
+    #         return path, "youtube"
+    #     else:
+    #         logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
+    #         Path(path).unlink(missing_ok=True)
 
     # Final fallback to Pytube
     try:
         query = f"{artist} {track_name}"
         logging.info(f"Trying pytube fallback for {query}")
-        path = pytube_fallback.download(f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}")
+
+        # Get video URL from search query
+        videosSearch = VideosSearch(query, limit=1)
+        results = videosSearch.result()
+        if not results['result']:
+            raise ValueError("No YouTube results found")
+        video_id = results['result'][0]['id']
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        path = pytube_fallback.download(video_url)
         duration = get_audio_duration(path)
         if duration >= min_duration_sec:
             return path, "youtube_pytube"
