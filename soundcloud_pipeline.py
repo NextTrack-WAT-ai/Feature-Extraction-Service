@@ -342,8 +342,7 @@ class YTDLPDownloader:
         try:
             # Define full download options with finalized output template
             ydl_opts_download = {
-                'format': 'bestaudio[filesize>10M]/bestaudio/best',
-                'prefer_free_formats': False,
+                'format': 'bestaudio/best',
                 # Use the finalized path (without extension, yt-dlp adds it)
                 'outtmpl': str(final_filename_path.with_suffix('.%(ext)s')),
                 'postprocessors': [{
