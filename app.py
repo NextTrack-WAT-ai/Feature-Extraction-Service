@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, SoundCloudPipeline
 import requests
+import librosa
 
 # ── Setup ────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -18,6 +19,46 @@ analyzer = pipeline.analyzer
 
 INFERENCE_URL = os.getenv("INFERENCE_URL")  # e.g. http://model-inference-service:8081/predict
 
+def get_audio_duration(path):
+    try:
+        y, sr = librosa.load(path, sr=None, mono=True, duration=300)
+        return librosa.get_duration(y=y, sr=sr)
+    except Exception as e:
+        logging.warning(f"Failed to get duration for {path}: {e}")
+        return 0
+
+
+def find_and_download_track(artist, track_name, scraper, downloader, min_duration_sec=60):
+    """Try SoundCloud first, fallback to YouTube if needed or too short."""
+    # Try SoundCloud
+    try:
+        html = scraper.search(track_name, artist)
+        results = scraper.parse_results(html)
+        best_match = scraper.find_best_match(results, track_name, artist)
+        if best_match:
+            path, success = downloader.download_track(best_match["url"], artist, track_name)
+            if success and path:
+                duration = get_audio_duration(path)
+                if duration >= min_duration_sec:
+                    return path, "soundcloud"
+                else:
+                    logging.warning(f"Track too short ({duration:.2f}s), falling back to YouTube.")
+                    Path(path).unlink(missing_ok=True)
+    except Exception as e:
+        logging.warning(f"SoundCloud download failed: {e}")
+
+    # Fallback to YouTube
+    yt_url = f"ytsearch1:{artist} {track_name}"
+    path, success = downloader.download_track(yt_url, artist, track_name)
+    if success:
+        duration = get_audio_duration(path)
+        if duration >= min_duration_sec:
+            return path, "youtube"
+        else:
+            logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
+            Path(path).unlink(missing_ok=True)
+    return None, None
+
 # ── Core Track Processor ─────────────────────────
 def _process_track(artist, track_name, debug=False, return_dict=False):
     track_key = f"{artist} - {track_name}"
@@ -26,16 +67,10 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
     try:
         logging.info(f"Processing: {track_key}")
         scraper = SoundCloudScraper(browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
-        html = scraper.search(track_name, artist)
-        results = scraper.parse_results(html)
-        best_match = scraper.find_best_match(results, track_name, artist)
-        if not best_match:
-            raise ValueError(f"No match found for '{track_key}'")
-
         downloader = YTDLPDownloader(DOWNLOAD_FOLDER)
-        audio_path, success = downloader.download_track(best_match["url"], artist, track_name)
-        if not success or not audio_path:
-            raise ValueError(f"Download failed for '{track_key}'")
+        audio_path, source = find_and_download_track(artist, track_name, scraper, downloader)
+        if not audio_path:
+            raise ValueError(f"Failed to get usable audio for '{track_key}' (too short or unavailable)")
 
         audio_file = Path(audio_path)
         logging.info(f"Downloaded: {audio_file}")
