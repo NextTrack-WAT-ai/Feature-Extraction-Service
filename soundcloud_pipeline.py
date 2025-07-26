@@ -297,6 +297,26 @@ class YouTubeCookieManager:
         self.browserless_api_key = browserless_api_key
         self.storage_state_path = storage_state_url
         self.cdp_endpoint = f"wss://production-sfo.browserless.io?token={self.browserless_api_key}"
+        self._local_storage_state_path = None  # Will cache local path after download
+
+    def _get_local_storage_state_path(self) -> str:
+        if self._local_storage_state_path:
+            return self._local_storage_state_path
+
+        if self.storage_state_url and self.storage_state_url.startswith("http"):
+            response = requests.get(self.storage_state_url)
+            response.raise_for_status()
+
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+            tmp_file.write(response.content)
+            tmp_file.flush()
+
+            self._local_storage_state_path = tmp_file.name
+            return self._local_storage_state_path
+        elif self.storage_state_url:
+            return self.storage_state_url
+        else:
+            raise ValueError("No valid storage_state URL or path provided.")
 
     def _get_browser_context_cookies(self, url: str = "https://youtube.com") -> list:
         logging.info("Requesting YouTube cookies via Browserless Playwright CDP connection...")
@@ -306,7 +326,7 @@ class YouTubeCookieManager:
             browser = p.chromium.connect_over_cdp(self.cdp_endpoint)
 
             # Create context using the stored auth state
-            context = browser.new_context(storage_state=str(self.storage_state_path))
+            context = browser.new_context(storage_state=self._get_local_storage_state_path())
 
             page = context.new_page()
             page.goto(url, wait_until="domcontentloaded")
