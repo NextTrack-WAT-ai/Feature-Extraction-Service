@@ -478,7 +478,7 @@ class SpotifyFeaturesTunable:
 
             # If y is stereo (multi-channel), convert to mono
             if y.ndim > 1:
-                y = np.mean(y, axis=0)
+                y = np.mean(y, axis=1)
                 logging.info("[precompute_base_features] Converted to mono")
             y_h, y_p = librosa.effects.hpss(y)
             logging.info("[precompute_base_features] Performed HPSS")
