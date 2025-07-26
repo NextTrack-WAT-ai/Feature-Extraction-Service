@@ -310,7 +310,6 @@ class YTDLPDownloader:
                 'logger': logging.getLogger('yt-dlp'),
                 'noprogress': True,
                 'noplaylist': True,
-                'cookiesfrombrowser': ('chrome', 'Default'),
                  # Add cookie file if needed for restricted content (requires browser addon like Get cookies.txt LOCALLY)
                  # 'cookiefile': 'path/to/your/cookies.txt',
             }
@@ -363,7 +362,6 @@ class YTDLPDownloader:
                 'noprogress': True,
                 'retries': 3,
                 'fragment_retries': 3,
-                'cookiesfrombrowser': ('chrome', 'Default'),
                 # Add cookie file if needed
                 # 'cookiefile': 'path/to/your/cookies.txt',
             }
@@ -416,12 +414,12 @@ class PytubeDownloader:
             base_name = f"{uuid4().hex}"
             audio_path = os.path.join(self.output_dir, f"{base_name}.mp4")
 
-            logger.info(f"Downloading audio stream for {url}")
+            logging.info(f"Downloading audio stream for {url}")
             stream.download(output_path=self.output_dir, filename=f"{base_name}.mp4")
 
             # Convert to mp3
             mp3_path = os.path.join(self.output_dir, f"{base_name}.mp3")
-            logger.info(f"Converting {audio_path} to mp3")
+            logging.info(f"Converting {audio_path} to mp3")
             audio = AudioSegment.from_file(audio_path)
             audio.export(mp3_path, format="mp3")
 
@@ -431,7 +429,7 @@ class PytubeDownloader:
             return mp3_path
 
         except Exception as e:
-            logger.error(f"Pytube download failed for {url}: {e}")
+            logging.error(f"Pytube download failed for {url}: {e}")
             raise
 
 class SpotifyFeaturesTunable:
