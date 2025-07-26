@@ -96,6 +96,15 @@ def get_no_proxies(*args, **kwargs):
         del kwargs['proxies']
     return _original_get(*args, **kwargs)
 requests.get = get_no_proxies
+
+_original_request = requests.Session.request
+
+def request_no_proxies(self, method, url, *args, **kwargs):
+    if 'proxies' in kwargs:
+        del kwargs['proxies']
+    return _original_request(self, method, url, *args, **kwargs)
+
+requests.Session.request = request_no_proxies
 from pytube import YouTube
 
 # --- Configuration ---
