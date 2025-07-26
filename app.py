@@ -88,7 +88,7 @@ def find_and_download_track(artist, track_name, scraper, downloader, pytube_fall
     # except Exception as e:
     #     logging.warning(f"Pytube fallback failed: {e}")
 
-    return None, None
+    return path, None
 
 # ── Core Track Processor ─────────────────────────
 def _process_track(artist, track_name, debug=False, return_dict=False):
