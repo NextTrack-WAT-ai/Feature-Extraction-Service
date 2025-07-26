@@ -321,7 +321,8 @@ class YouTubeCookieManager:
 
         try:
             headers = {
-                "Content-Type": "application/javascript"
+                "Content-Type": "application/javascript",
+                "x-browserless-context": "true"
             }
             response = requests.post(
                 self.browserless_url,
