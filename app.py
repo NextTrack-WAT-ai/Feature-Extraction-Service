@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
-from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, SoundCloudPipeline
+from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, PytubeDownloader, SoundCloudPipeline
 import requests
 import librosa
 
@@ -28,7 +28,7 @@ def get_audio_duration(path):
         return 0
 
 
-def find_and_download_track(artist, track_name, scraper, downloader, min_duration_sec=60):
+def find_and_download_track(artist, track_name, scraper, downloader, pytube_fallback, min_duration_sec=60):
     """Try SoundCloud first, fallback to YouTube if needed or too short."""
     # Try SoundCloud
     try:
@@ -57,6 +57,20 @@ def find_and_download_track(artist, track_name, scraper, downloader, min_duratio
         else:
             logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
             Path(path).unlink(missing_ok=True)
+
+    # Final fallback to Pytube
+    try:
+        query = f"{artist} {track_name}"
+        logging.info(f"Trying pytube fallback for {query}")
+        path = pytube_fallback.download(f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}")
+        duration = get_audio_duration(path)
+        if duration >= min_duration_sec:
+            return path, "youtube_pytube"
+        else:
+            logging.warning(f"Pytube fallback also too short: {duration:.2f}s")
+            Path(path).unlink(missing_ok=True)
+    except Exception as e:
+        logging.warning(f"Pytube fallback failed: {e}")
     return None, None
 
 # ── Core Track Processor ─────────────────────────
@@ -68,7 +82,8 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
         logging.info(f"Processing: {track_key}")
         scraper = SoundCloudScraper(browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
         downloader = YTDLPDownloader(DOWNLOAD_FOLDER)
-        audio_path, source = find_and_download_track(artist, track_name, scraper, downloader)
+        pytube_fallback = PytubeDownloader(DOWNLOAD_FOLDER)
+        audio_path, source = find_and_download_track(artist, track_name, scraper, downloader, pytube_fallback)
         if not audio_path:
             raise ValueError(f"Failed to get usable audio for '{track_key}' (too short or unavailable)")
 

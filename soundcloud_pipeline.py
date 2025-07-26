@@ -74,6 +74,9 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import median_filter
 import traceback
+from pytube import YouTube
+from pydub import AudioSegment
+from uuid import uuid4
 
 # --- Configuration ---
 DOWNLOAD_FOLDER = Path("downloads")
@@ -395,6 +398,41 @@ class YTDLPDownloader:
             logging.error(f"An unexpected error occurred during yt-dlp download for {url}: {e}", exc_info=True)
             
         return final_filename, download_successful
+
+class PytubeDownloader:
+    def __init__(self, output_dir="/tmp"):
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    def download(self, url: str) -> str:
+        """Download YouTube audio and return path to the mp3 file."""
+        try:
+            yt = YouTube(url)
+            stream = yt.streams.filter(only_audio=True).order_by("abr").desc().first()
+            if not stream:
+                raise ValueError("No audio stream found for the video.")
+
+            # Use UUID to avoid name collisions
+            base_name = f"{uuid4().hex}"
+            audio_path = os.path.join(self.output_dir, f"{base_name}.mp4")
+
+            logger.info(f"Downloading audio stream for {url}")
+            stream.download(output_path=self.output_dir, filename=f"{base_name}.mp4")
+
+            # Convert to mp3
+            mp3_path = os.path.join(self.output_dir, f"{base_name}.mp3")
+            logger.info(f"Converting {audio_path} to mp3")
+            audio = AudioSegment.from_file(audio_path)
+            audio.export(mp3_path, format="mp3")
+
+            # Cleanup original mp4
+            os.remove(audio_path)
+
+            return mp3_path
+
+        except Exception as e:
+            logger.error(f"Pytube download failed for {url}: {e}")
+            raise
 
 class SpotifyFeaturesTunable:
     
