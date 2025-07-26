@@ -303,8 +303,8 @@ class YouTubeCookieManager:
         if self._local_storage_state_path:
             return self._local_storage_state_path
 
-        if self.storage_state_url and self.storage_state_url.startswith("http"):
-            response = requests.get(self.storage_state_url)
+        if self.storage_state_path and self.storage_state_path.startswith("http"):
+            response = requests.get(self.storage_state_path)
             response.raise_for_status()
 
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
@@ -313,8 +313,8 @@ class YouTubeCookieManager:
 
             self._local_storage_state_path = tmp_file.name
             return self._local_storage_state_path
-        elif self.storage_state_url:
-            return self.storage_state_url
+        elif self.storage_state_path:
+            return self.storage_state_path
         else:
             raise ValueError("No valid storage_state URL or path provided.")
 
