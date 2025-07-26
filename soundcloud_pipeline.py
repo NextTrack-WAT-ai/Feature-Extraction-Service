@@ -297,21 +297,38 @@ class YouTubeCookieManager:
     def _get_browser_context_cookies(self, url: str = "https://youtube.com") -> list:
         logging.info("Requesting YouTube cookies via browserless...")
 
-        payload = {
-            "url": url,
-            "gotoOptions": {"waitUntil": "domcontentloaded"},
-            "setExtraHTTPHeaders": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-            },
-            "cookies": []
-        }
+        js_script = f"""
+        export default async function({{ page, context }}) {{
+          try {{
+            await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
+            await page.goto("{url}", {{
+              waitUntil: "domcontentloaded",
+              timeout: 60000
+            }});
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            const cookies = await context.cookies();
+            return {{
+              data: cookies,
+              type: "application/json"
+            }};
+          }} catch (err) {{
+            return {{
+              data: "ERROR: " + err.toString(),
+              type: "text/plain"
+            }};
+          }}
+        }}
+        """
 
-        resp = requests.post(f"{self.browserless_url}/content?stealth=true", json=payload)
-        resp.raise_for_status()
+        response = requests.post(self.browserless_url, json={"code": js_script})
+        response.raise_for_status()
 
-        browser_cookies = resp.json().get("cookies", [])
-        logging.info(f"Received {len(browser_cookies)} cookies from Browserless")
-        return browser_cookies
+        json_data = response.json()
+        if isinstance(json_data, dict) and "data" in json_data and isinstance(json_data["data"], list):
+            logging.info(f"Received {len(json_data['data'])} cookies from Browserless")
+            return json_data["data"]
+        else:
+            raise RuntimeError("Failed to retrieve cookies from browserless response")
 
     def save_cookies_as_netscape(self, cookies: list, filepath: Optional[Path] = None) -> Path:
         """
