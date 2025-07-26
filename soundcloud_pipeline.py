@@ -404,7 +404,7 @@ class YTDLPDownloader:
                 'noprogress': True,
                 'noplaylist': True,
                  # Add cookie file if needed for restricted content (requires browser addon like Get cookies.txt LOCALLY)
-                 'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
+                #  'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
             }
             with yt_dlp.YoutubeDL(ydl_opts_info) as ydl_info:
                 logging.debug("Extracting metadata with yt-dlp...")
@@ -456,7 +456,7 @@ class YTDLPDownloader:
                 'retries': 3,
                 'fragment_retries': 3,
                 # Add cookie file if needed
-                'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
+                # 'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
             }
             
             # If output_path is provided, use it for yt-dlp's outtmpl

@@ -2,6 +2,7 @@ import os
 import logging
 import numpy as np
 from pathlib import Path
+import pandas as pd
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from soundcloud_pipeline import SoundCloudScraper, YTDLPDownloader, PytubeDownloader, SoundCloudPipeline
@@ -14,6 +15,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = Flask(__name__)
 DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+# Load music info CSV (on startup)
+MUSIC_INFO_CSV_PATH = "music_info_cleaned.csv"
+music_info_df = pd.read_csv(MUSIC_INFO_CSV_PATH)
+
+# Normalize lookup index
+music_info_df["lookup_key"] = (
+    music_info_df["artist"].str.strip().str.lower() + " - " + 
+    music_info_df["name"].str.strip().str.lower()
+)
+music_info_df.set_index("lookup_key", inplace=True)
 
 pipeline = SoundCloudPipeline(download_folder=DOWNLOAD_FOLDER)
 analyzer = pipeline.analyzer
@@ -92,6 +103,33 @@ def find_and_download_track(artist, track_name, scraper, downloader, pytube_fall
 
 # ── Core Track Processor ─────────────────────────
 def _process_track(artist, track_name, debug=False, return_dict=False):
+    track_key = f"{artist.strip().lower()} - {track_name.strip().lower()}"
+
+    # Check if we already have known features for this song
+    if track_key in music_info_df.index:
+        logging.info(f"Found existing features for: {track_key}")
+        row = music_info_df.loc[track_key]
+
+        # Build feature dict to match inference model keys
+        feats = {
+            "danceability": row["danceability"],
+            "energy": row["energy"],
+            "key": row["key"],
+            "loudness": row["loudness"],
+            "mode": row["mode"],
+            "speechiness": row["speechiness"],
+            "acousticness": row["acousticness"],
+            "instrumentalness": row["instrumentalness"],
+            "liveness": row["liveness"],
+            "valence": row["valence"],
+            "tempo": row["tempo"],
+        }
+
+        # Optionally: convert to native Python types (in case any are NumPy)
+        feats = {k: (v.item() if hasattr(v, "item") else v) for k, v in feats.items()}
+
+        return feats if return_dict else (jsonify(feats), 200)
+
     track_key = f"{artist} - {track_name}"
     audio_file = None
 
