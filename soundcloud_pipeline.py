@@ -483,10 +483,10 @@ class SpotifyFeaturesTunable:
                 y = np.mean(y, axis=1)
                 logging.info("[precompute_base_features] Converted to mono")
 
-            if sr != TARGET_SR:
-                y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
-                sr = TARGET_SR
-                logging.info(f"[precompute_base_features] Resampled audio to {TARGET_SR} Hz")
+            # if sr != TARGET_SR:
+            #     y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
+            #     sr = TARGET_SR
+            #     logging.info(f"[precompute_base_features] Resampled audio to {TARGET_SR} Hz")
 
             duration_sec = librosa.get_duration(y=y, sr=sr)
             if duration_sec > MAX_DURATION:
