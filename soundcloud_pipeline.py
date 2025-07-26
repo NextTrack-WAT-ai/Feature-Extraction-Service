@@ -307,6 +307,7 @@ class YTDLPDownloader:
                 'logger': logging.getLogger('yt-dlp'),
                 'noprogress': True,
                 'noplaylist': True,
+                'cookiesfrombrowser': 'chrome',
                  # Add cookie file if needed for restricted content (requires browser addon like Get cookies.txt LOCALLY)
                  # 'cookiefile': 'path/to/your/cookies.txt',
             }
@@ -359,6 +360,7 @@ class YTDLPDownloader:
                 'noprogress': True,
                 'retries': 3,
                 'fragment_retries': 3,
+                'cookiesfrombrowser': 'chrome',
                 # Add cookie file if needed
                 # 'cookiefile': 'path/to/your/cookies.txt',
             }
