@@ -289,32 +289,35 @@ class SoundCloudScraper:
 class YouTubeCookieManager:
     """
     Fetches YouTube cookies using Browserless and outputs them in a format compatible with yt-dlp.
+    Uses a pre-authenticated storageState.json file to simulate a logged-in YouTube session.
     """
-    def __init__(self, browserless_api_key: str):
+    def __init__(self, browserless_api_key: str, storage_state_url: str):
         self.browserless_api_key = browserless_api_key
         self.browserless_url = f"https://production-sfo.browserless.io/function?token={self.browserless_api_key}"
+        self.storage_state_url = storage_state_url
 
     def _get_browser_context_cookies(self, url="https://youtube.com") -> list:
-        logging.info("Requesting YouTube cookies via browserless...")
+        logging.info("Requesting YouTube cookies via browserless with storageState...")
 
         script = f"""
-            export default async function({{ page }}) {{
+            export default async function({{ browser }}) {{
                 try {{
+                    const context = await browser.newContext({{
+                        storageState: "{self.storage_state_url}"
+                    }});
+                    const page = await context.newPage();
                     await page.goto("{url}", {{
                         waitUntil: "domcontentloaded",
                         timeout: 60000
                     }});
-                    await new Promise(resolve => setTimeout(resolve, 3000));  // Wait 3 seconds
-                    const cookies = await page.cookies();
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    const cookies = await context.cookies();
                     return {{ cookies }};
                 }} catch (err) {{
-                    return {{
-                        error: err.toString()
-                    }};
+                    return {{ error: err.toString() }};
                 }}
             }}
-            """
-
+        """
 
         try:
             headers = {
@@ -341,7 +344,6 @@ class YouTubeCookieManager:
         except Exception as e:
             logging.error(f"Browserless cookie request failed: {e}")
             raise
-
     
     def save_cookies_as_netscape(self, cookies: list, filepath: Optional[Path] = None) -> Path:
         """
@@ -375,9 +377,9 @@ class YouTubeCookieManager:
 class YTDLPDownloader:
     """Handles downloading audio tracks using the yt-dlp library."""
 
-    def __init__(self, download_folder, browserless_api_key=str):
+    def __init__(self, download_folder, browserless_api_key=str, storage_state_url=str):
         self.download_folder = Path(download_folder)
-        self.cookie_mgr = YouTubeCookieManager(browserless_api_key=browserless_api_key)
+        self.cookie_mgr = YouTubeCookieManager(browserless_api_key=browserless_api_key, storage_state_url=storage_state_url)
 
 
     def download_track(self, url, expected_artist, expected_title, output_path=None):
