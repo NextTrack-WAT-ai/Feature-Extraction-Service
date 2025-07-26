@@ -48,39 +48,46 @@ def find_and_download_track(artist, track_name, scraper, downloader, pytube_fall
     except Exception as e:
         logging.warning(f"SoundCloud download failed: {e}")
 
-    # # Fallback to YouTube
+    # # Fallback to YouTube with yt-dlp
     # yt_url = f"ytsearch1:{artist} {track_name}"
     # path, success = downloader.download_track(yt_url, artist, track_name)
     # if success:
     #     duration = get_audio_duration(path)
     #     if duration >= min_duration_sec:
-    #         return path, "youtube"
+    #         return path, "youtube_yt-dlp"
     #     else:
     #         logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
     #         Path(path).unlink(missing_ok=True)
 
-    # Final fallback to Pytube
+    # Final fallback to Pytube + youtube-search-python
     try:
         query = f"{artist} {track_name}"
-        logging.info(f"Trying pytube fallback for {query}")
+        logging.info(f"Trying pytube fallback for query: {query}")
 
-        # Get video URL from search query
-        videosSearch = VideosSearch(query, limit=1)
-        results = videosSearch.result()
-        if not results['result']:
+        # Search YouTube for the video URL
+        videos_search = VideosSearch(query, limit=1)
+        results = videos_search.result()
+        if not results.get('result'):
             raise ValueError("No YouTube results found")
         video_id = results['result'][0]['id']
         video_url = f"https://www.youtube.com/watch?v={video_id}"
+        logging.info(f"Found YouTube video: {video_url}")
 
-        path = pytube_fallback.download(video_url)
+        # Download audio only with pytube
+        path = pytube_fallback.download_audio_only(video_url)
+        if path is None:
+            raise ValueError("Pytube failed to download audio")
+
         duration = get_audio_duration(path)
         if duration >= min_duration_sec:
             return path, "youtube_pytube"
         else:
-            logging.warning(f"Pytube fallback also too short: {duration:.2f}s")
+            logging.warning(f"Pytube fallback audio too short: {duration:.2f}s")
             Path(path).unlink(missing_ok=True)
+
     except Exception as e:
         logging.warning(f"Pytube fallback failed: {e}")
+
     return None, None
 
 # ── Core Track Processor ─────────────────────────

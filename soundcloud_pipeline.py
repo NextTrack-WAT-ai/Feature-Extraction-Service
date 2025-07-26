@@ -398,39 +398,28 @@ class YTDLPDownloader:
         return final_filename, download_successful
 
 class PytubeDownloader:
-    def __init__(self, output_dir="/tmp"):
-        self.output_dir = output_dir
-        os.makedirs(self.output_dir, exist_ok=True)
+    def __init__(self, download_folder):
+        self.download_folder = Path(download_folder)
+        self.download_folder.mkdir(parents=True, exist_ok=True)
 
-    def download(self, url: str) -> str:
-        """Download YouTube audio and return path to the mp3 file."""
+    def download_audio_only(self, video_url):
         try:
-            yt = YouTube(url)
-            stream = yt.streams.filter(only_audio=True).order_by("abr").desc().first()
-            if not stream:
-                raise ValueError("No audio stream found for the video.")
-
-            # Use UUID to avoid name collisions
-            base_name = f"{uuid4().hex}"
-            audio_path = os.path.join(self.output_dir, f"{base_name}.mp4")
-
-            logging.info(f"Downloading audio stream for {url}")
-            stream.download(output_path=self.output_dir, filename=f"{base_name}.mp4")
-
-            # Convert to mp3
-            mp3_path = os.path.join(self.output_dir, f"{base_name}.mp3")
-            logging.info(f"Converting {audio_path} to mp3")
-            audio = AudioSegment.from_file(audio_path)
-            audio.export(mp3_path, format="mp3")
-
-            # Cleanup original mp4
-            os.remove(audio_path)
-
-            return mp3_path
-
+            yt = YouTube(video_url)
+            audio_stream = yt.streams.filter(only_audio=True).order_by('abr').desc().first()
+            if not audio_stream:
+                logging.error("No audio-only stream found")
+                return None
+            output_path = audio_stream.download(output_path=str(self.download_folder))
+            # Rename file extension to .mp3 if necessary (optional)
+            output_path = Path(output_path)
+            if output_path.suffix != ".mp3":
+                new_path = output_path.with_suffix(".mp3")
+                output_path.rename(new_path)
+                output_path = new_path
+            return str(output_path)
         except Exception as e:
-            logging.error(f"Pytube download failed for {url}: {e}")
-            raise
+            logging.error(f"Pytube download failed for {video_url}: {e}")
+            return None
 
 class SpotifyFeaturesTunable:
     
