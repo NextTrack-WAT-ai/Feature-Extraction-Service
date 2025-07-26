@@ -74,38 +74,9 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import median_filter
 import traceback
-import pytube.request
-
-_original_urlopen = pytube.request.urlopen
-def urlopen_no_proxies(*args, **kwargs):
-    if 'proxies' in kwargs:
-        del kwargs['proxies']
-    return _original_urlopen(*args, **kwargs)
-pytube.request.urlopen = urlopen_no_proxies
-
-_original_post = requests.post
-def post_no_proxies(*args, **kwargs):
-    if 'proxies' in kwargs:
-        del kwargs['proxies']
-    return _original_post(*args, **kwargs)
-requests.post = post_no_proxies
-
-_original_get = requests.get
-def get_no_proxies(*args, **kwargs):
-    if 'proxies' in kwargs:
-        del kwargs['proxies']
-    return _original_get(*args, **kwargs)
-requests.get = get_no_proxies
-
-_original_request = requests.Session.request
-
-def request_no_proxies(self, method, url, *args, **kwargs):
-    if 'proxies' in kwargs:
-        del kwargs['proxies']
-    return _original_request(self, method, url, *args, **kwargs)
-
-requests.Session.request = request_no_proxies
 from pytube import YouTube
+from typing import Optional
+import tempfile
 
 # --- Configuration ---
 DOWNLOAD_FOLDER = Path("downloads")
@@ -315,13 +286,69 @@ class SoundCloudScraper:
         logging.warning("No good match found.")
         return None
 
+class YouTubeCookieManager:
+    """
+    Fetches YouTube cookies using Browserless and outputs them in a format compatible with yt-dlp.
+    """
+    def __init__(self, browserless_api_key: str):
+        self.browserless_api_key = browserless_api_key
+        self.browserless_url = f"https://production-sfo.browserless.io/function?token={self.browserless_api_key}"
+
+    def _get_browser_context_cookies(self, url: str = "https://youtube.com") -> list:
+        logging.info("Requesting YouTube cookies via browserless...")
+
+        payload = {
+            "url": url,
+            "gotoOptions": {"waitUntil": "domcontentloaded"},
+            "setExtraHTTPHeaders": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+            },
+            "cookies": []
+        }
+
+        resp = requests.post(f"{self.browserless_url}/content?stealth=true", json=payload)
+        resp.raise_for_status()
+
+        browser_cookies = resp.json().get("cookies", [])
+        logging.info(f"Received {len(browser_cookies)} cookies from Browserless")
+        return browser_cookies
+
+    def save_cookies_as_netscape(self, cookies: list, filepath: Optional[Path] = None) -> Path:
+        """
+        Saves cookies to file in Netscape format used by yt-dlp.
+        """
+        if filepath is None:
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix="_cookies.txt")
+            filepath = Path(temp.name)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("# Netscape HTTP Cookie File\n")
+            for c in cookies:
+                domain = c.get("domain", ".youtube.com")
+                include_subdomains = "TRUE"
+                path = c.get("path", "/")
+                secure = "TRUE" if c.get("secure") else "FALSE"
+                expires = str(c.get("expires", 0))
+                name = c.get("name")
+                value = c.get("value")
+                if name and value:
+                    f.write(f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}\n")
+
+        logging.info(f"Saved cookies to: {filepath}")
+        return filepath
+
+    def get_cookie_file_for_ytdlp(self) -> Path:
+        cookies = self._get_browser_context_cookies()
+        return self.save_cookies_as_netscape(cookies)
 
 # --- New YTDLPDownloader Class ---
 class YTDLPDownloader:
     """Handles downloading audio tracks using the yt-dlp library."""
 
-    def __init__(self, download_folder):
+    def __init__(self, download_folder, browserless_api_key=str):
         self.download_folder = Path(download_folder)
+        self.cookie_mgr = YouTubeCookieManager(browserless_api_key=browserless_api_key)
+
 
     def download_track(self, url, expected_artist, expected_title, output_path=None):
         """Downloads a single track from the given URL using yt-dlp."""
@@ -340,7 +367,7 @@ class YTDLPDownloader:
                 'noprogress': True,
                 'noplaylist': True,
                  # Add cookie file if needed for restricted content (requires browser addon like Get cookies.txt LOCALLY)
-                 # 'cookiefile': 'path/to/your/cookies.txt',
+                 'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
             }
             with yt_dlp.YoutubeDL(ydl_opts_info) as ydl_info:
                 logging.debug("Extracting metadata with yt-dlp...")
@@ -392,7 +419,7 @@ class YTDLPDownloader:
                 'retries': 3,
                 'fragment_retries': 3,
                 # Add cookie file if needed
-                # 'cookiefile': 'path/to/your/cookies.txt',
+                'cookiefile': self.cookie_mgr.get_cookie_file_for_ytdlp(),
             }
             
             # If output_path is provided, use it for yt-dlp's outtmpl

@@ -98,7 +98,7 @@ def _process_track(artist, track_name, debug=False, return_dict=False):
     try:
         logging.info(f"Processing: {track_key}")
         scraper = SoundCloudScraper(browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
-        downloader = YTDLPDownloader(DOWNLOAD_FOLDER)
+        downloader = YTDLPDownloader(DOWNLOAD_FOLDER, browserless_api_key=os.environ["BROWSERLESS_API_KEY"])
         pytube_fallback = PytubeDownloader(DOWNLOAD_FOLDER)
         audio_path, source = find_and_download_track(artist, track_name, scraper, downloader, pytube_fallback)
         if not audio_path:
