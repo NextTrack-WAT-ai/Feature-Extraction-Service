@@ -38,26 +38,26 @@ def find_and_download_track(artist, track_name, scraper, downloader, pytube_fall
         best_match = scraper.find_best_match(results, track_name, artist)
         if best_match:
             path, success = downloader.download_track(best_match["url"], artist, track_name)
-            if success and path:
-                duration = get_audio_duration(path)
-                if duration >= min_duration_sec:
-                    return path, "soundcloud"
-                else:
-                    logging.warning(f"Track too short ({duration:.2f}s), falling back to YouTube.")
-                    Path(path).unlink(missing_ok=True)
+            # if success and path:
+            #     duration = get_audio_duration(path)
+            #     if duration >= min_duration_sec:
+            #         return path, "soundcloud"
+            #     else:
+            #         logging.warning(f"Track too short ({duration:.2f}s), falling back to YouTube.")
+            #         Path(path).unlink(missing_ok=True)
     except Exception as e:
         logging.warning(f"SoundCloud download failed: {e}")
 
     # Fallback to YouTube with yt-dlp
-    yt_url = f"ytsearch1:{artist} {track_name}"
-    path, success = downloader.download_track(yt_url, artist, track_name)
-    if success:
-        duration = get_audio_duration(path)
-        if duration >= min_duration_sec:
-            return path, "youtube_yt-dlp"
-        else:
-            logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
-            Path(path).unlink(missing_ok=True)
+    # yt_url = f"ytsearch1:{artist} {track_name}"
+    # path, success = downloader.download_track(yt_url, artist, track_name)
+    # if success:
+    #     duration = get_audio_duration(path)
+    #     if duration >= min_duration_sec:
+    #         return path, "youtube_yt-dlp"
+    #     else:
+    #         logging.warning(f"YouTube fallback also too short: {duration:.2f}s")
+    #         Path(path).unlink(missing_ok=True)
 
     # # Final fallback to Pytube + youtube-search-python
     # try:
